@@ -35,7 +35,6 @@ LockMix_Shared / UnlockMix_Shared
 #define DWORD int
 #define HWND intptr_t
 #define HANDLE intptr_t
-// #define NULL 0
 #define MAX_PATH 256
 #define RTL_CRITICAL_SECTION intptr_t
 typedef unsigned long ULONG;

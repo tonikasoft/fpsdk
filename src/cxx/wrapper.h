@@ -48,5 +48,4 @@ protected:
 	float _gain;
 };
 
-// std::unique_ptr<TFruityPlug> create_plug_instance_c(TFruityPlugHost &Host, int64_t Tag);
 TFruityPlug& create_plug_instance_c(TFruityPlugHost& Host, int64_t Tag);
