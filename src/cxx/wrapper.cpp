@@ -15,8 +15,8 @@ TFruityPlugInfo PlugInfo =
 	1 // the amount of parameters
 };
 
-TFruityPlug& create_plug_instance_c(TFruityPlugHost& Host, int64_t Tag) {
-    Wrapper* wrapper = new Wrapper(&Host, (int) Tag);
+TFruityPlug& create_plug_instance_c(TFruityPlugHost& Host, int Tag) {
+    Wrapper* wrapper = new Wrapper(&Host, Tag);
     return *((TFruityPlug*) wrapper);
 }
 

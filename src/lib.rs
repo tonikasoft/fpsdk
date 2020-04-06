@@ -14,10 +14,13 @@
 //! ## Installation
 //!
 //! Plugins are installed in FL Studio in subfolders of the `FL Studio\Plugins\Fruity` folder on
-//! Windows and `FL\ Studio.app/Contents/Resources/FL/Plugins/Fruity` for macOS. Effects go in the
-//! **Effects** subfolder, generators are installed in the **Generators** subfolder. Each plugin
-//! has its own folder. The name of the folder has to be same as the name of the plugin. On macOS
-//! the plugin (.dylib) also has to have `_x64` suffix.
+//! Windows and `FL\ Studio.app/Contents/Resources/FL/Plugins/Fruity` for macOS. 
+//!
+//! Effects go in the **Effects** subfolder, generators are installed in the **Generators**
+//! subfolder. Each plugin has its own folder. 
+//!
+//! The name of the folder has to be same as the name of the plugin. On macOS the plugin (.dylib)
+//! also has to have `_x64` suffix.
 //!
 #![deny(
     nonstandard_style,
@@ -48,7 +51,7 @@ pub mod ffi {
 
         pub fn create_plug_instance_c(
             host: &'static mut TFruityPlugHost,
-            tag: i64,
+            tag: i32,
         ) -> &'static mut TFruityPlug;
     }
 
@@ -62,6 +65,15 @@ pub const CURRENT_SDK_VERSION: i32 = 1;
 pub trait Plugin {
     /// Get plugin [`Info`](struct.Info.html)
     fn info() -> Info;
+    /// Called when a new instance of the plugin is created.
+    fn create_instance(host: Host, tag: i32);
+}
+
+/// Plugin host.
+#[derive(Debug)]
+pub struct Host {
+    version: i32,
+    flags: i32,
 }
 
 /// This structure holds some information about the plugin that is used by the host. It is the same
@@ -119,7 +131,7 @@ impl InfoBuilder {
 
     /// Initializer for a full standalone generator.
     ///
-    /// This is a combination of [`generator`](sturct.InfoBuilder.html#method.generator) and
+    /// This is a combination of [`generator`](struct.InfoBuilder.html#method.generator) and
     /// [`note_input`](struct.InfoBuilder.html#method.get_note_input).
     pub fn new_full_gen(long_name: &str, short_name: &str, num_params: i32) -> Self {
         InfoBuilder::new_effect(long_name, short_name, num_params)
@@ -254,14 +266,14 @@ impl InfoBuilder {
     }
 
     /// This plugin as a generator will use the sample loaded in its parent channel (see
-    /// [`DispatcherId::ChanSampleChanged`](enum.DispatcherId.html)).
+    /// [`PluginDispatcherId::ChanSampleChanged`](enum.PluginDispatcherId.html)).
     pub fn get_chan_sample(mut self) -> Self {
         self.flags |= 1 << 19;
         self
     }
 
     /// Fit to time selector will appear in channel settings window (see
-    /// [`DispatcherId::SetFitTime`](enum.DispatcherId.html)).
+    /// [`PluginDispatcherId::SetFitTime`](enum.PluginDispatcherId.html)).
     pub fn want_fit_time(mut self) -> Self {
         self.flags |= 1 << 20;
         self
@@ -293,15 +305,13 @@ impl InfoBuilder {
 #[macro_export]
 macro_rules! create_plugin {
     () => {
-        use std::os::raw::c_int;
-
         #[allow(non_snake_case)]
         #[no_mangle]
         pub unsafe extern "C" fn CreatePlugInstance(
             host: *mut $crate::ffi::TFruityPlugHost,
-            tag: c_int,
+            tag: i32,
         ) -> *mut $crate::ffi::TFruityPlug {
-            $crate::ffi::create_plug_instance_c(&mut *host, tag as i64)
+            $crate::ffi::create_plug_instance_c(&mut *host, tag)
         }
     };
 }
