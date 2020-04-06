@@ -14,10 +14,10 @@
 //! ## Installation
 //!
 //! Plugins are installed in FL Studio in subfolders of the `FL Studio\Plugins\Fruity` folder on
-//! Windows and `FL\ Studio.app/Contents/Resources/FL/Plugins/Fruity` for macOS. 
+//! Windows and `FL\ Studio.app/Contents/Resources/FL/Plugins/Fruity` for macOS.
 //!
 //! Effects go in the **Effects** subfolder, generators are installed in the **Generators**
-//! subfolder. Each plugin has its own folder. 
+//! subfolder. Each plugin has its own folder.
 //!
 //! The name of the folder has to be same as the name of the plugin. On macOS the plugin (.dylib)
 //! also has to have `_x64` suffix.
@@ -63,10 +63,13 @@ pub const CURRENT_SDK_VERSION: i32 = 1;
 
 /// This trait should be implemented for your plugin
 pub trait Plugin {
+    /// Initializer
+    // We can't just use Default inheritance, because we need to specify Sized marker for Self
+    fn new() -> Self where Self: Sized;
     /// Get plugin [`Info`](struct.Info.html)
-    fn info() -> Info;
+    fn info(&self) -> Info;
     /// Called when a new instance of the plugin is created.
-    fn create_instance(host: Host, tag: i32);
+    fn create_instance(&mut self, host: Host, tag: i32);
 }
 
 /// Plugin host.
@@ -304,13 +307,14 @@ impl InfoBuilder {
 /// Exposes your plugin from DLL
 #[macro_export]
 macro_rules! create_plugin {
-    () => {
+    ($pl:ty) => {
         #[allow(non_snake_case)]
         #[no_mangle]
         pub unsafe extern "C" fn CreatePlugInstance(
             host: *mut $crate::ffi::TFruityPlugHost,
             tag: i32,
         ) -> *mut $crate::ffi::TFruityPlug {
+            let pl: Box<dyn $crate::Plugin> = Box::new(<$pl>::default());
             $crate::ffi::create_plug_instance_c(&mut *host, tag)
         }
     };
