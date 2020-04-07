@@ -5,12 +5,14 @@
 
 const int NumParams = 1;	// the amount of parameters
 
+struct PluginAdapter;
+
 class sample_editor {};
 
 class Wrapper : public TFruityPlug
 {
 public:
-	Wrapper(TFruityPlugHost *Host, int Tag);
+	Wrapper(TFruityPlugHost *Host, int Tag, PluginAdapter& adapter);
 	virtual ~Wrapper();
 
 	// from TFruityPlug
@@ -41,6 +43,8 @@ protected:
 	// host
 	TFruityPlugHost* _host;
 
+    PluginAdapter* adapter;
+
 	// parameter
 	int _params[NumParams];
 
@@ -48,4 +52,5 @@ protected:
 	float _gain;
 };
 
-TFruityPlug& create_plug_instance_c(TFruityPlugHost& Host, int Tag);
+
+TFruityPlug& create_plug_instance_c(TFruityPlugHost& Host, int Tag, rust::Box<PluginAdapter> adapter);

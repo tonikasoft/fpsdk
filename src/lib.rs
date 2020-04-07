@@ -38,21 +38,31 @@
     unreachable_pub
 )]
 
-use std::panic::RefUnwindSafe;
-
 /// Used internally for C++ <-> Rust interoperability. Shouldn't be used directly.
 #[doc(hidden)]
 #[cxx::bridge]
 pub mod ffi {
-    struct SharedInfo {
-        sdk_version: i32,
-        long_name: String,
-        short_name: String,
+    /// This structure holds some information about the plugin that is used by the host. It is the same
+    /// for all instances of the same plugin.
+    ///
+    /// Instantiate it using [`InfoBuilder`](struct.InfoBuilder.html).
+    pub struct Info {
+        /// This has to be the version of the SDK used to create the plugin. This value is available in
+        /// the constant CurrentSDKVersion
+        pub sdk_version: i32,
+        /// The name of the plugin dll, without the extension (.dll)
+        pub long_name: String,
+        /// Short plugin name, to be used in labels to tell the user which plugin he is working with
+        pub short_name: String,
         flags: i32,
-        num_params: i32,
-        def_poly: i32,
-        num_out_ctrls: i32,
-        num_out_voices: i32,
+        /// The number of parameters for this plugin
+        pub num_params: i32,
+        /// Preferred (default) maximum polyphony (FL Studio manages the polyphony) (0=infinite)
+        pub def_poly: i32,
+        /// Number of internal output controllers
+        pub num_out_ctrls: i32,
+        /// Number of internal output voices
+        pub num_out_voices: i32,
     }
 
     extern "C" {
@@ -64,16 +74,20 @@ pub mod ffi {
         pub fn create_plug_instance_c(
             host: &'static mut TFruityPlugHost,
             tag: i32,
+            adapter: Box<PluginAdapter>,
         ) -> &'static mut TFruityPlug;
     }
 
     extern "Rust" {
         type PluginAdapter;
-        type Info;
 
-        fn plugin_info(adapter: &PluginAdapter) -> SharedInfo;
+        fn plugin_info(adapter: &PluginAdapter) -> Info;
     }
 }
+
+use std::panic::RefUnwindSafe;
+
+pub use ffi::Info;
 
 /// Current FL SDK version.
 pub const CURRENT_SDK_VERSION: i32 = 1;
@@ -83,34 +97,10 @@ pub const CURRENT_SDK_VERSION: i32 = 1;
 ///
 /// This is for internal usage only and shouldn't be used directly.
 #[doc(hidden)]
-pub struct PluginAdapter {
-    plugin: Box<dyn Plugin>,
-}
+pub struct PluginAdapter(pub Box<dyn Plugin>);
 
-impl PluginAdapter {
-    /// Initializer
-    pub fn new(plugin: Box<dyn Plugin>) -> Self {
-        Self { plugin }
-    }
-}
-
-fn plugin_info(adapter: &PluginAdapter) -> ffi::SharedInfo {
-    adapter.plugin.info().into()
-}
-
-impl From<Info> for ffi::SharedInfo {
-    fn from(info: Info) -> Self {
-        Self {
-            sdk_version: info.sdk_version,
-            long_name: info.long_name,
-            short_name: info.short_name,
-            flags: info.flags,
-            num_params: info.num_params,
-            def_poly: info.def_poly,
-            num_out_ctrls: info.num_out_ctrls,
-            num_out_voices: info.num_out_voices,
-        }
-    }
+fn plugin_info(adapter: &PluginAdapter) -> Info {
+    adapter.0.info()
 }
 
 /// This trait must be implemented for your plugin.
@@ -133,30 +123,6 @@ pub struct Host {
     flags: i32,
 }
 
-/// This structure holds some information about the plugin that is used by the host. It is the same
-/// for all instances of the same plugin.
-///
-/// Instantiate it using [`InfoBuilder`](struct.InfoBuilder.html).
-#[derive(Clone, Debug)]
-pub struct Info {
-    /// This has to be the version of the SDK used to create the plugin. This value is available in
-    /// the constant CurrentSDKVersion
-    pub sdk_version: i32,
-    /// The name of the plugin dll, without the extension (.dll)
-    pub long_name: String,
-    /// Short plugin name, to be used in labels to tell the user which plugin he is working with
-    pub short_name: String,
-    flags: i32,
-    /// The number of parameters for this plugin
-    pub num_params: i32,
-    /// Preferred (default) maximum polyphony (FL Studio manages the polyphony) (0=infinite)
-    pub def_poly: i32,
-    /// Number of internal output controllers
-    pub num_out_ctrls: i32,
-    /// Number of internal output voices
-    pub num_out_voices: i32,
-}
-
 /// Use this to instantiate [`Info`](struct.Info.html)
 #[derive(Clone, Debug)]
 pub struct InfoBuilder {
@@ -172,6 +138,8 @@ pub struct InfoBuilder {
 
 impl InfoBuilder {
     /// Initializer for an effect.
+    ///
+    /// This is the most basic type.
     pub fn new_effect(long_name: &str, short_name: &str, num_params: i32) -> Self {
         Self {
             sdk_version: CURRENT_SDK_VERSION,
@@ -371,8 +339,8 @@ macro_rules! create_plugin {
         ) -> *mut $crate::ffi::TFruityPlug {
             let mut plugin = <$pl as $crate::Plugin>::new();
             // plugin.create_instance(...)
-            let adapter = $crate::PluginAdapter::new(Box::new(plugin));
-            $crate::ffi::create_plug_instance_c(&mut *host, tag)
+            let adapter = $crate::PluginAdapter(Box::new(plugin));
+            $crate::ffi::create_plug_instance_c(&mut *host, tag, Box::new(adapter))
         }
     };
 }

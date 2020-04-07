@@ -1,5 +1,6 @@
 #include <cstring>
 #include "wrapper.h"
+#include "../../target/cxxbridge/src/lib.rs.h"
 
 //---------------------
 // Plug-in information
@@ -15,21 +16,22 @@ TFruityPlugInfo PlugInfo =
 	1 // the amount of parameters
 };
 
-TFruityPlug& create_plug_instance_c(TFruityPlugHost& Host, int Tag) {
-    Wrapper* wrapper = new Wrapper(&Host, Tag);
+TFruityPlug& create_plug_instance_c(TFruityPlugHost& Host, int Tag, rust::Box<PluginAdapter> adapter) {
+    Wrapper* wrapper = new Wrapper(&Host, Tag, *adapter);
     return *((TFruityPlug*) wrapper);
 }
 
 //----------------
 // constructor
 //----------------
-Wrapper::Wrapper(TFruityPlugHost *Host, int Tag)
+Wrapper::Wrapper(TFruityPlugHost *Host, int Tag, PluginAdapter& adap)
 {
 	Info = &PlugInfo;
 	HostTag = Tag;
 	EditorHandle = 0;
 	_host = Host;
 	_editor = nullptr;
+    adapter = &adap;
 
 	// parameter initialze
 	_gain = 0.25;
