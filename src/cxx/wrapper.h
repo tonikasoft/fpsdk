@@ -1,7 +1,7 @@
 #pragma once
 
-#include <memory>
 #include "fp_plugclass.h"
+#include "../../target/cxxbridge/rust/cxx.h"
 
 const int NumParams = 1;	// the amount of parameters
 

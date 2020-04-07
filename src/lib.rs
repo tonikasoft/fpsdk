@@ -1,7 +1,7 @@
-//! The FL Plugin sdk helps you to make plugins for FL Studio. For more information about FL
-//! Studio, visit the [website](www.flstudio.com).
+//! The FL Plugin SDK helps you to make plugins for FL Studio. For more information about FL
+//! Studio, visit the [website](https://www.image-line.com/flstudio/).
 //!
-//! Note that this sdk is not meant to make hosts for FL plugins.
+//! Note that this SDK is not meant to make hosts for FL plugins.
 //!
 //! ## Types of plugins
 //!
@@ -38,10 +38,22 @@
     unreachable_pub
 )]
 
+use std::panic::RefUnwindSafe;
+
 /// Used internally for C++ <-> Rust interoperability. Shouldn't be used directly.
 #[doc(hidden)]
 #[cxx::bridge]
 pub mod ffi {
+    struct SharedInfo {
+        sdk_version: i32,
+        long_name: String,
+        short_name: String,
+        flags: i32,
+        num_params: i32,
+        def_poly: i32,
+        num_out_ctrls: i32,
+        num_out_voices: i32,
+    }
 
     extern "C" {
         include!("wrapper.h");
@@ -55,17 +67,59 @@ pub mod ffi {
         ) -> &'static mut TFruityPlug;
     }
 
-    extern "Rust" {}
+    extern "Rust" {
+        type PluginAdapter;
+        type Info;
+
+        fn plugin_info(adapter: &PluginAdapter) -> SharedInfo;
+    }
 }
 
-/// Current FL SDK version
+/// Current FL SDK version.
 pub const CURRENT_SDK_VERSION: i32 = 1;
 
-/// This trait should be implemented for your plugin
-pub trait Plugin {
+/// As far as we can't use trait objects to share them with C++, we need a concrete type. This type
+/// wraps user's plugin as a delegate and calls its methods.
+///
+/// This is for internal usage only and shouldn't be used directly.
+#[doc(hidden)]
+pub struct PluginAdapter {
+    plugin: Box<dyn Plugin>,
+}
+
+impl PluginAdapter {
+    /// Initializer
+    pub fn new(plugin: Box<dyn Plugin>) -> Self {
+        Self { plugin }
+    }
+}
+
+fn plugin_info(adapter: &PluginAdapter) -> ffi::SharedInfo {
+    adapter.plugin.info().into()
+}
+
+impl From<Info> for ffi::SharedInfo {
+    fn from(info: Info) -> Self {
+        Self {
+            sdk_version: info.sdk_version,
+            long_name: info.long_name,
+            short_name: info.short_name,
+            flags: info.flags,
+            num_params: info.num_params,
+            def_poly: info.def_poly,
+            num_out_ctrls: info.num_out_ctrls,
+            num_out_voices: info.num_out_voices,
+        }
+    }
+}
+
+/// This trait must be implemented for your plugin.
+pub trait Plugin: RefUnwindSafe {
     /// Initializer
     // We can't just use Default inheritance, because we need to specify Sized marker for Self
-    fn new() -> Self where Self: Sized;
+    fn new() -> Self
+    where
+        Self: Sized;
     /// Get plugin [`Info`](struct.Info.html)
     fn info(&self) -> Info;
     /// Called when a new instance of the plugin is created.
@@ -304,7 +358,8 @@ impl InfoBuilder {
     }
 }
 
-/// Exposes your plugin from DLL
+/// Exposes your plugin from DLL. Accepts type name as input. The type should implement
+/// [`Plugin`](trait.Plugin.html) trait.
 #[macro_export]
 macro_rules! create_plugin {
     ($pl:ty) => {
@@ -314,7 +369,9 @@ macro_rules! create_plugin {
             host: *mut $crate::ffi::TFruityPlugHost,
             tag: i32,
         ) -> *mut $crate::ffi::TFruityPlug {
-            let pl: Box<dyn $crate::Plugin> = Box::new(<$pl>::default());
+            let mut plugin = <$pl as $crate::Plugin>::new();
+            // plugin.create_instance(...)
+            let adapter = $crate::PluginAdapter::new(Box::new(plugin));
             $crate::ffi::create_plug_instance_c(&mut *host, tag)
         }
     };
