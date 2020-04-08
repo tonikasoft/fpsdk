@@ -2,31 +2,31 @@
 #include "wrapper.h"
 #include "../../target/cxxbridge/src/lib.rs.h"
 
-//---------------------
-// Plug-in information
-//---------------------
-char dllname[] = "Pocrs";
-char name[] = "Pocrs";
-TFruityPlugInfo PlugInfo =
-{
-	CurrentSDKVersion,
-	dllname,
-	name,
-	FPF_Type_Effect,
-	1 // the amount of parameters
-};
-
 TFruityPlug& create_plug_instance_c(TFruityPlugHost& Host, int Tag, rust::Box<PluginAdapter> adapter) {
-    Wrapper* wrapper = new Wrapper(&Host, Tag, *adapter);
+    Info info = plugin_info(*adapter);
+
+    char* lname = new char[info.long_name.size()+1];
+    std::strcpy(lname, info.long_name.data());
+    char* sname = new char[info.short_name.size()+1];
+    std::strcpy(sname, info.short_name.data());
+    
+    PFruityPlugInfo c_info = new TFruityPlugInfo {
+        info.sdk_version,
+        lname,
+        sname,
+        info.flags,
+        info.num_params,
+        info.def_poly,
+        info.num_out_ctrls,
+        info.num_out_voices
+    };
+    PluginWrapper* wrapper = new PluginWrapper(&Host, Tag, *adapter, c_info);
     return *((TFruityPlug*) wrapper);
 }
 
-//----------------
-// constructor
-//----------------
-Wrapper::Wrapper(TFruityPlugHost *Host, int Tag, PluginAdapter& adap)
+PluginWrapper::PluginWrapper(TFruityPlugHost *Host, int Tag, PluginAdapter& adap, PFruityPlugInfo info)
 {
-	Info = &PlugInfo;
+	Info = info;
 	HostTag = Tag;
 	EditorHandle = 0;
 	_host = Host;
@@ -38,18 +38,18 @@ Wrapper::Wrapper(TFruityPlugHost *Host, int Tag, PluginAdapter& adap)
 	_params[0] = (1<<16);
 }
 
-//----------------
-// destructor
-//----------------
-Wrapper::~Wrapper()
+PluginWrapper::~PluginWrapper()
 {
 	delete _editor;
+    delete Info->LongName;
+    delete Info->ShortName;
+    delete Info;
 }
 
 //-------------------------
 // save or load parameter
 //-------------------------
-void _stdcall Wrapper::SaveRestoreState(IStream *Stream, BOOL Save)
+void _stdcall PluginWrapper::SaveRestoreState(IStream *Stream, BOOL Save)
 {
 	if( Save )
 	{
@@ -62,7 +62,7 @@ void _stdcall Wrapper::SaveRestoreState(IStream *Stream, BOOL Save)
 		// load paremeters
 		unsigned long length = 0;
 		Stream->Read(_params, sizeof(_params), &length);
-		for( int ii = 0; ii < NumParams; ii++ )
+		for( int ii = 0; ii < Info->NumParams; ii++ )
 		{
 			if( ii == 0 )
 			{
@@ -81,7 +81,7 @@ void _stdcall Wrapper::SaveRestoreState(IStream *Stream, BOOL Save)
 //----------------
 // 
 //----------------
-intptr_t _stdcall Wrapper::Dispatcher(intptr_t ID, intptr_t Index, intptr_t Value)
+intptr_t _stdcall PluginWrapper::Dispatcher(intptr_t ID, intptr_t Index, intptr_t Value)
 {
 	// if( ID == FPD_ShowEditor )
 	// {
@@ -115,7 +115,7 @@ intptr_t _stdcall Wrapper::Dispatcher(intptr_t ID, intptr_t Index, intptr_t Valu
 //----------------
 // 
 //----------------
-void _stdcall Wrapper::GetName(int Section, int Index, int Value, char *Name)
+void _stdcall PluginWrapper::GetName(int Section, int Index, int Value, char *Name)
 {
 	if(Section == FPN_Param)
 	{
@@ -123,7 +123,7 @@ void _stdcall Wrapper::GetName(int Section, int Index, int Value, char *Name)
 	}
 }
 
-int _stdcall Wrapper::ProcessEvent(int EventID, int EventValue, int Flags)
+int _stdcall PluginWrapper::ProcessEvent(int EventID, int EventValue, int Flags)
 {
 	return 0;
 }
@@ -131,10 +131,10 @@ int _stdcall Wrapper::ProcessEvent(int EventID, int EventValue, int Flags)
 //----------------
 // 
 //----------------
-int _stdcall Wrapper::ProcessParam(int Index, int Value, int RECFlags)
+int _stdcall PluginWrapper::ProcessParam(int Index, int Value, int RECFlags)
 {
 	int ret = 0;
-	if( Index < NumParams )
+	if( Index < Info->NumParams )
 	{
 		if( RECFlags & REC_UpdateValue )
 		{
@@ -182,7 +182,7 @@ int _stdcall Wrapper::ProcessParam(int Index, int Value, int RECFlags)
 //----------------
 // idle
 //----------------
-void _stdcall Wrapper::Idle_Public()
+void _stdcall PluginWrapper::Idle_Public()
 {
 	// if (_editor) _editor->doIdleStuff();
 }
@@ -190,7 +190,7 @@ void _stdcall Wrapper::Idle_Public()
 //----------------
 // effect
 //----------------
-void _stdcall Wrapper::Eff_Render(PWAV32FS SourceBuffer, PWAV32FS DestBuffer, int Length)
+void _stdcall PluginWrapper::Eff_Render(PWAV32FS SourceBuffer, PWAV32FS DestBuffer, int Length)
 {
 	float gain = _gain;
 	for (int ii = 0; ii < Length; ii++)
@@ -200,54 +200,54 @@ void _stdcall Wrapper::Eff_Render(PWAV32FS SourceBuffer, PWAV32FS DestBuffer, in
 	}
 }
 
-void _stdcall Wrapper::Gen_Render(PWAV32FS DestBuffer, int& Length)
+void _stdcall PluginWrapper::Gen_Render(PWAV32FS DestBuffer, int& Length)
 {
 }
 
-TVoiceHandle _stdcall Wrapper::TriggerVoice(PVoiceParams VoiceParams, intptr_t SetTag)
+TVoiceHandle _stdcall PluginWrapper::TriggerVoice(PVoiceParams VoiceParams, intptr_t SetTag)
 {
 	return TVoiceHandle();
 }
 
-void _stdcall Wrapper::Voice_Release(TVoiceHandle Handle)
+void _stdcall PluginWrapper::Voice_Release(TVoiceHandle Handle)
 {
 }
 
-void _stdcall Wrapper::Voice_Kill(TVoiceHandle Handle)
+void _stdcall PluginWrapper::Voice_Kill(TVoiceHandle Handle)
 {
 }
 
-int _stdcall Wrapper::Voice_ProcessEvent(TVoiceHandle Handle, int EventID, int EventValue, int Flags)
-{
-	return 0;
-}
-
-int _stdcall Wrapper::Voice_Render(TVoiceHandle Handle, PWAV32FS DestBuffer, int& Length)
+int _stdcall PluginWrapper::Voice_ProcessEvent(TVoiceHandle Handle, int EventID, int EventValue, int Flags)
 {
 	return 0;
 }
 
-void _stdcall Wrapper::NewTick()
-{
-}
-
-void _stdcall Wrapper::MIDITick()
-{
-}
-
-void _stdcall Wrapper::MIDIIn(int& Msg)
-{
-}
-
-void _stdcall Wrapper::MsgIn(intptr_t Msg)
-{
-}
-
-int _stdcall Wrapper::OutputVoice_ProcessEvent(TOutVoiceHandle Handle, int EventID, int EventValue, int Flags)
+int _stdcall PluginWrapper::Voice_Render(TVoiceHandle Handle, PWAV32FS DestBuffer, int& Length)
 {
 	return 0;
 }
 
-void _stdcall Wrapper::OutputVoice_Kill(TVoiceHandle Handle)
+void _stdcall PluginWrapper::NewTick()
+{
+}
+
+void _stdcall PluginWrapper::MIDITick()
+{
+}
+
+void _stdcall PluginWrapper::MIDIIn(int& Msg)
+{
+}
+
+void _stdcall PluginWrapper::MsgIn(intptr_t Msg)
+{
+}
+
+int _stdcall PluginWrapper::OutputVoice_ProcessEvent(TOutVoiceHandle Handle, int EventID, int EventValue, int Flags)
+{
+	return 0;
+}
+
+void _stdcall PluginWrapper::OutputVoice_Kill(TVoiceHandle Handle)
 {
 }

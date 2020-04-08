@@ -42,17 +42,18 @@
 #[doc(hidden)]
 #[cxx::bridge]
 pub mod ffi {
-    /// This structure holds some information about the plugin that is used by the host. It is the same
-    /// for all instances of the same plugin.
+    /// This structure holds some information about the plugin that is used by the host. It is the
+    /// same for all instances of the same plugin.
     ///
     /// Instantiate it using [`InfoBuilder`](struct.InfoBuilder.html).
     pub struct Info {
-        /// This has to be the version of the SDK used to create the plugin. This value is available in
-        /// the constant CurrentSDKVersion
+        /// This has to be the version of the SDK used to create the plugin. This value is
+        /// available in the constant CurrentSDKVersion
         pub sdk_version: i32,
         /// The name of the plugin dll, without the extension (.dll)
         pub long_name: String,
-        /// Short plugin name, to be used in labels to tell the user which plugin he is working with
+        /// Short plugin name, to be used in labels to tell the user which plugin he is working
+        /// with
         pub short_name: String,
         flags: i32,
         /// The number of parameters for this plugin
@@ -276,7 +277,8 @@ impl InfoBuilder {
         self
     }
 
-    /// The plugin will send delayed messages to itself (will require the internal sync clock to be enabled).
+    /// The plugin will send delayed messages to itself (will require the internal sync clock to be
+    /// enabled).
     pub fn msg_out(mut self) -> Self {
         self.flags |= 1 << 17;
         self

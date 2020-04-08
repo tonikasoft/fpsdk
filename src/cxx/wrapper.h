@@ -3,17 +3,15 @@
 #include "fp_plugclass.h"
 #include "../../target/cxxbridge/rust/cxx.h"
 
-const int NumParams = 1;	// the amount of parameters
-
 struct PluginAdapter;
 
 class sample_editor {};
 
-class Wrapper : public TFruityPlug
+class PluginWrapper : public TFruityPlug
 {
 public:
-	Wrapper(TFruityPlugHost *Host, int Tag, PluginAdapter& adapter);
-	virtual ~Wrapper();
+	PluginWrapper(TFruityPlugHost *Host, int Tag, PluginAdapter& adapter, PFruityPlugInfo info);
+	virtual ~PluginWrapper();
 
 	// from TFruityPlug
 	virtual intptr_t _stdcall Dispatcher(intptr_t ID, intptr_t Index, intptr_t Value);
@@ -46,7 +44,7 @@ protected:
     PluginAdapter* adapter;
 
 	// parameter
-	int _params[NumParams];
+	int _params[1024];
 
 	// gain
 	float _gain;
