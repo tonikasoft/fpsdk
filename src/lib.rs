@@ -86,6 +86,7 @@ pub mod ffi {
     }
 }
 
+use std::ffi::c_void;
 use std::panic::RefUnwindSafe;
 
 pub use ffi::Info;
@@ -115,6 +116,167 @@ pub trait Plugin: RefUnwindSafe {
     fn info(&self) -> Info;
     /// Called when a new instance of the plugin is created.
     fn create_instance(&mut self, host: Host, tag: i32);
+    /// The host calls this function to request something that isn't done in a specialized
+    /// function.
+    ///
+    /// # Arguments
+    ///
+    /// * message — message from the host ([`HostMessage`](enum.HostMessage.html))
+    fn on_message(&self, message: HostMessage) -> i32;
+}
+
+/// Message from the host to the plugin
+pub enum HostMessage {
+    /// Contains the handle of the parent window is the editor has to be shown.
+    ShowEditor(Option<*mut c_void>),
+    /// Change the processing mode flags. This can be ignored. See Processing Mode Flags
+    ///
+    /// The value is the new flags.
+    ProcessMode(i32),
+    /// The continuity of processing is broken. This means that the user has jumped ahead or back
+    /// in the playlist, for example. When this happens, the plugin needs to clear all buffers and
+    /// start like new
+    ///
+    /// **Warning: this can be called from the mixer thread!**
+    Flush,
+    /// This changes the maximum processing length, expressed in samples.
+    ///
+    /// The value is the new length.
+    SetBlockSize(u32),
+    /// This changes the sample rate.
+    ///
+    /// Value holds the new sample rate
+    SetSampleRate(u32),
+    /// This allows the plugin to define how the editor window should be resized.
+    ///
+    /// The first value will hold a pointer to a rectangle for the minimum (Left and Top) and
+    /// maximum (Right and Bottom) width and height of the window
+    ///
+    /// The second value holds a pointer to a point structure that defines by how much the window
+    /// size should change horizontally and vertically when the user drags the border.
+    WindowMinMax(*mut c_void, *mut c_void),
+    /// (not used yet) The host has noticed that too much processing power is used and asks the
+    /// plugin to kill its weakest voice.
+    ///
+    /// The plugin has to return `1` if it did anything, `0` otherwise
+    KillAVoice,
+    /// Only full generators have to respond to this message. It's meant to allow the cutoff and
+    /// resonance parameters of a voice to be used for other purposes, if the generator doesn't use
+    /// them as cutoff and resonance.
+    ///
+    /// - return `0` if the plugin doesn't support the default per-voice level value 
+    /// - return `1` if the plugin supports the default per-voice level value (filter cutoff (0) or
+    ///   filter resonance (1)) 
+    /// - return `2` if the plugin supports the per-voice level value, but for another function
+    ///   (then check FPN_VoiceLevel to provide your own names)
+    UseVoiceLevels(u8),
+    /// Called when the user selects a preset. 
+    ///
+    /// The value tells you which one to set.
+    SetPreset(u32),
+    /// A sample has been loaded into the parent channel. This is given to the plugin as a
+    /// wavetable, in the same format as the WaveTables member of TFruityPlugin. Also see
+    /// FPF_GetChanCustomShape.
+    ///
+    /// The value holds a pointer to the new shape.
+    //TODO
+    ChanSampleChanged,
+    /// The host has enabled/disabled the plugin.
+    ///
+    /// The value will contain the new state (`false` for disabled, `true` for enabled)
+    ///
+    /// **Warning: this can be called from the mixer thread!**
+    SetEnabled(bool),
+    /// The host is playing (song pos info is valid when playing) or stopped (state in the value)
+    ///
+    /// **Warning: can be called from the mixing thread**
+    SetPlaying(bool, u32),
+    /// The song position has jumped from one position to another non-consecutive position
+    ///
+    /// **Warning: can be called from the mixing thread**
+    SongPosChanged,
+    /// The time signature has changed.
+    ///
+    /// Value holds a pointer to a TTimeSigInfo structure (PTimeSigInfo) with the new information
+    //TODO
+    SetTimeSig,
+    /// This is called to let the plugin tell the host which files need to be collected or put in
+    /// zip files. The name of the file is passed to the host as a pchar/char* in the result of the
+    /// dispatcher function. The host keeps calling this until the plugin returns zero. 
+    ///
+    /// The value holds the file #, which starts at 0
+    //TODO
+    CollectFile(u32),
+    /// (private message to known plugins, ignore) tells the plugin to update a specific,
+    /// non-automated param
+    SetInternalParam,
+    /// This tells the plugin how many send tracks there are (fixed to 4, but could be set by the
+    /// user at any time in a future update)
+    ///
+    /// The value holds the number of send tracks
+    SetNumSends(u32),
+    /// Called when a file has been dropped onto the parent channel's button.
+    ///
+    /// The value holds filename.
+    LoadFile(String),
+    /// Set fit to time in beats 
+    ///
+    /// The value holds the time.
+    SetFitTime(f32),
+    /// Sets the number of samples in each tick. This value changes when the tempo, ppq or sample
+    /// rate have changed.
+    ///
+    /// **Warning: can be called from the mixing thread**
+    SetSamplesPerTick(u32),
+    /// Sets the frequency at which Idle is called.
+    ///
+    /// The value holds the new time (milliseconds)
+    SetIdleTime(u32),
+    /// (FL 7.0) The host has focused/unfocused the editor (focused in Value) (plugin can use this
+    /// to steal keyboard focus)
+    SetFocus,
+    /// (FL 8.0) This is sent by the host for special transport messages, from a controller. 
+    ///
+    /// The value is the type of message (see transport types)
+    ///
+    /// Result should be 1 if handled, 0 otherwise
+    //TODO
+    Transport(u32),
+    /// (FL 8.0) Live MIDI input preview. This allows the plugin to steal messages (mostly for
+    /// transport purposes). Must return 1 if handled. 
+    ///
+    /// The value has the packed MIDI message. Only note on/off for now.
+    ///
+    /// Result should be 1 if handled, 0 otherwise
+    //TODO
+    MIDIIn,
+    /// Mixer routing changed, must check FHD_GetInOuts if necessary
+    //TODO
+    RoutingChanged,
+    /// Retrieves info about a parameter. 
+    ///
+    /// The value is the parameter number.
+    /// see PI_Float for the result
+    //TODO
+    GetParamInfo(u32),
+    /// Called after a project has been loaded, to leave a chance to kill automation (that could be
+    /// loaded after the plugin is created) if necessary.
+    ProjLoaded,
+    /// (private message to the plugin wrapper) Load a (VST, DX) plugin state, 
+    /// 
+    /// WrapperLoadState,
+    ShowSettings,
+    /// Input (the first value)/output (the second value) latency of the output, in samples (only
+    /// for information)
+    SetIOLatency(u32, u32),
+    /// (message from Patcher) retrieves the preferred number of audio inputs (the value is `0`),
+    /// audio outputs (the value is `1`) or voice outputs (the value is `2`)
+    ///
+    /// Result is has to be:
+    ///
+    /// * `0` - default number
+    /// * `-1` - none
+    PreferredNumIO(u8),
 }
 
 /// Plugin host.

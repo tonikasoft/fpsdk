@@ -12,7 +12,7 @@ impl Plugin for Test {
     }
 
     fn info(&self) -> Info {
-        InfoBuilder::new_effect("Simple Rs", "Simple Rs", 1).build()
+        InfoBuilder::new_effect("Simple", "Simple", 1).build()
     }
 
     fn create_instance(&mut self, host: Host, tag: i32) {
