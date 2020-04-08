@@ -109,13 +109,11 @@ fn plugin_info(adapter: &PluginAdapter) -> Info {
 pub trait Plugin: RefUnwindSafe {
     /// Initializer
     // We can't just use Default inheritance, because we need to specify Sized marker for Self
-    fn new() -> Self
+    fn new(host: Host, tag: i32) -> Self
     where
         Self: Sized;
     /// Get plugin [`Info`](struct.Info.html)
     fn info(&self) -> Info;
-    /// Called when a new instance of the plugin is created.
-    fn create_instance(&mut self, host: Host, tag: i32);
     /// The host calls this function to request something that isn't done in a specialized
     /// function.
     ///
@@ -126,8 +124,8 @@ pub trait Plugin: RefUnwindSafe {
 /// Plugin host.
 #[derive(Debug)]
 pub struct Host {
-    version: i32,
-    flags: i32,
+    pub version: i32,
+    pub flags: i32,
 }
 
 /// Message from the host to the plugin
@@ -505,8 +503,11 @@ macro_rules! create_plugin {
             host: *mut $crate::ffi::TFruityPlugHost,
             tag: i32,
         ) -> *mut $crate::ffi::TFruityPlug {
-            let mut plugin = <$pl as $crate::Plugin>::new();
-            // plugin.create_instance(...)
+            let ho = $crate::Host {
+                version: 0,
+                flags: 0,
+            };
+            let mut plugin = <$pl as $crate::Plugin>::new(ho, tag);
             let adapter = $crate::PluginAdapter(Box::new(plugin));
             $crate::ffi::create_plug_instance_c(&mut *host, tag, Box::new(adapter))
         }
