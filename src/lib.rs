@@ -127,7 +127,7 @@ pub trait Plugin: RefUnwindSafe {
 
 /// Message from the host to the plugin
 pub enum HostMessage {
-    /// Contains the handle of the parent window is the editor has to be shown.
+    /// Contains the handle of the parent window if the editor has to be shown.
     ShowEditor(Option<*mut c_void>),
     /// Change the processing mode flags. This can be ignored. See Processing Mode Flags
     ///
