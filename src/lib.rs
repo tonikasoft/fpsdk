@@ -119,10 +119,15 @@ pub trait Plugin: RefUnwindSafe {
     /// The host calls this function to request something that isn't done in a specialized
     /// function.
     ///
-    /// # Arguments
-    ///
-    /// * message — message from the host ([`HostMessage`](enum.HostMessage.html))
-    fn on_message(&self, message: HostMessage) -> i32;
+    /// See [`HostMessage`](enum.HostMessage.html) for possible messages.
+    fn on_message(&self, message: HostMessage) -> Box<dyn DispatcherResult>;
+}
+
+/// Plugin host.
+#[derive(Debug)]
+pub struct Host {
+    version: i32,
+    flags: i32,
 }
 
 /// Message from the host to the plugin
@@ -164,13 +169,13 @@ pub enum HostMessage {
     /// resonance parameters of a voice to be used for other purposes, if the generator doesn't use
     /// them as cutoff and resonance.
     ///
-    /// - return `0` if the plugin doesn't support the default per-voice level value 
+    /// - return `0` if the plugin doesn't support the default per-voice level value
     /// - return `1` if the plugin supports the default per-voice level value (filter cutoff (0) or
-    ///   filter resonance (1)) 
+    ///   filter resonance (1))
     /// - return `2` if the plugin supports the per-voice level value, but for another function
     ///   (then check FPN_VoiceLevel to provide your own names)
     UseVoiceLevels(u8),
-    /// Called when the user selects a preset. 
+    /// Called when the user selects a preset.
     ///
     /// The value tells you which one to set.
     SetPreset(u32),
@@ -202,7 +207,7 @@ pub enum HostMessage {
     SetTimeSig,
     /// This is called to let the plugin tell the host which files need to be collected or put in
     /// zip files. The name of the file is passed to the host as a pchar/char* in the result of the
-    /// dispatcher function. The host keeps calling this until the plugin returns zero. 
+    /// dispatcher function. The host keeps calling this until the plugin returns zero.
     ///
     /// The value holds the file #, which starts at 0
     //TODO
@@ -219,7 +224,7 @@ pub enum HostMessage {
     ///
     /// The value holds filename.
     LoadFile(String),
-    /// Set fit to time in beats 
+    /// Set fit to time in beats
     ///
     /// The value holds the time.
     SetFitTime(f32),
@@ -235,7 +240,7 @@ pub enum HostMessage {
     /// (FL 7.0) The host has focused/unfocused the editor (focused in Value) (plugin can use this
     /// to steal keyboard focus)
     SetFocus,
-    /// (FL 8.0) This is sent by the host for special transport messages, from a controller. 
+    /// (FL 8.0) This is sent by the host for special transport messages, from a controller.
     ///
     /// The value is the type of message (see transport types)
     ///
@@ -243,7 +248,7 @@ pub enum HostMessage {
     //TODO
     Transport(u32),
     /// (FL 8.0) Live MIDI input preview. This allows the plugin to steal messages (mostly for
-    /// transport purposes). Must return 1 if handled. 
+    /// transport purposes). Must return 1 if handled.
     ///
     /// The value has the packed MIDI message. Only note on/off for now.
     ///
@@ -253,7 +258,7 @@ pub enum HostMessage {
     /// Mixer routing changed, must check FHD_GetInOuts if necessary
     //TODO
     RoutingChanged,
-    /// Retrieves info about a parameter. 
+    /// Retrieves info about a parameter.
     ///
     /// The value is the parameter number.
     /// see PI_Float for the result
@@ -262,8 +267,8 @@ pub enum HostMessage {
     /// Called after a project has been loaded, to leave a chance to kill automation (that could be
     /// loaded after the plugin is created) if necessary.
     ProjLoaded,
-    /// (private message to the plugin wrapper) Load a (VST, DX) plugin state, 
-    /// 
+    /// (private message to the plugin wrapper) Load a (VST, DX) plugin state,
+    ///
     /// WrapperLoadState,
     ShowSettings,
     /// Input (the first value)/output (the second value) latency of the output, in samples (only
@@ -272,19 +277,18 @@ pub enum HostMessage {
     /// (message from Patcher) retrieves the preferred number of audio inputs (the value is `0`),
     /// audio outputs (the value is `1`) or voice outputs (the value is `2`)
     ///
-    /// Result is has to be:
+    /// Result has to be:
     ///
     /// * `0` - default number
     /// * `-1` - none
     PreferredNumIO(u8),
 }
 
-/// Plugin host.
-#[derive(Debug)]
-pub struct Host {
-    version: i32,
-    flags: i32,
-}
+/// Dispatcher result marker
+pub trait DispatcherResult {}
+
+impl DispatcherResult for bool {}
+impl DispatcherResult for i32 {}
 
 /// Use this to instantiate [`Info`](struct.Info.html)
 #[derive(Clone, Debug)]
