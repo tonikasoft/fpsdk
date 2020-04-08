@@ -1,4 +1,4 @@
-use fpsdk::{create_plugin, Host, Info, InfoBuilder, Plugin};
+use fpsdk::{create_plugin, Host, HostMessage, Info, InfoBuilder, Plugin, DispatcherResult};
 
 #[derive(Default)]
 struct Test {
@@ -18,6 +18,10 @@ impl Plugin for Test {
     fn create_instance(&mut self, host: Host, tag: i32) {
         self.host = Some(host);
         self.tag = Some(tag);
+    }
+
+    fn on_message(&mut self, message: HostMessage) -> Box<dyn DispatcherResult> {
+        Box::new(0)
     }
 }
 

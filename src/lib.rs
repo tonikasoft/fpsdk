@@ -120,7 +120,7 @@ pub trait Plugin: RefUnwindSafe {
     /// function.
     ///
     /// See [`HostMessage`](enum.HostMessage.html) for possible messages.
-    fn on_message(&self, message: HostMessage) -> Box<dyn DispatcherResult>;
+    fn on_message(&mut self, message: HostMessage) -> Box<dyn DispatcherResult>;
 }
 
 /// Plugin host.
