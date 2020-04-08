@@ -164,7 +164,7 @@ pub enum HostMessage {
     /// plugin to kill its weakest voice.
     ///
     /// The plugin has to return `1` if it did anything, `0` otherwise
-    KillAVoice,
+    KillVoice,
     /// Only full generators have to respond to this message. It's meant to allow the cutoff and
     /// resonance parameters of a voice to be used for other purposes, if the generator doesn't use
     /// them as cutoff and resonance.
@@ -254,7 +254,7 @@ pub enum HostMessage {
     ///
     /// Result should be 1 if handled, 0 otherwise
     //TODO
-    MIDIIn,
+    MidiIn,
     /// Mixer routing changed, must check FHD_GetInOuts if necessary
     //TODO
     RoutingChanged,
@@ -273,7 +273,7 @@ pub enum HostMessage {
     ShowSettings,
     /// Input (the first value)/output (the second value) latency of the output, in samples (only
     /// for information)
-    SetIOLatency(u32, u32),
+    SetIoLatency(u32, u32),
     /// (message from Patcher) retrieves the preferred number of audio inputs (the value is `0`),
     /// audio outputs (the value is `1`) or voice outputs (the value is `2`)
     ///
@@ -281,7 +281,7 @@ pub enum HostMessage {
     ///
     /// * `0` - default number
     /// * `-1` - none
-    PreferredNumIO(u8),
+    PreferredNumIo(u8),
 }
 
 /// Dispatcher result marker
