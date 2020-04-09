@@ -79,6 +79,12 @@ pub mod ffi {
         pub port: u8,
     }
 
+    pub struct Message {
+        pub id: isize,
+        pub index: isize,
+        pub value: isize,
+    }
+
     extern "C" {
         include!("wrapper.h");
 
@@ -96,6 +102,7 @@ pub mod ffi {
         type PluginAdapter;
 
         fn plugin_info(adapter: &PluginAdapter) -> Info;
+        fn plugin_dispatcher(mut adapter: Box<PluginAdapter>, message: Message) -> isize;
     }
 }
 
@@ -103,6 +110,7 @@ use std::ffi::c_void;
 use std::panic::RefUnwindSafe;
 
 use bitflags::bitflags;
+use libc::intptr_t;
 
 pub use ffi::{Info, MidiMessage, TimeSignature};
 
@@ -118,6 +126,10 @@ pub struct PluginAdapter(pub Box<dyn Plugin>);
 
 fn plugin_info(adapter: &PluginAdapter) -> Info {
     adapter.0.info()
+}
+
+fn plugin_dispatcher(mut adapter: Box<PluginAdapter>, message: ffi::Message) -> intptr_t {
+    adapter.0.on_message(HostMessage::from(message)).as_intptr()
 }
 
 /// This trait must be implemented for your plugin.
@@ -290,11 +302,19 @@ pub enum HostMessage<'a> {
     /// * `0i32` - default number
     /// * `-1i32` - none
     PreferredNumIo(u8),
+    /// Unknown message.
+    Unknown,
+}
+
+impl From<ffi::Message> for HostMessage<'_> {
+    fn from(message: ffi::Message) -> Self {
+        todo!()
+    }
 }
 
 bitflags! {
     /// Parameter flags.
-    pub struct ParameterFlags: i32 {
+    pub struct ParameterFlags: isize {
         /// Makes no sense to interpolate parameter values (when values are not levels).
         const CANT_INTERPOLATE = 1;
         /// Parameter is a normalized (0..1) single float. (Integer otherwise)
@@ -316,7 +336,7 @@ bitflags! {
         const HQ_NON_REALTIME = 2;
         /// FL is rendering to file if this flag is set.
         const IS_RENDERING = 16;
-        /// (changed in FL 7.0) 3 bits value for interpolation quality 
+        /// (changed in FL 7.0) 3 bits value for interpolation quality
         ///
         /// - 0=none (obsolete)
         /// - 1=linear
@@ -330,13 +350,35 @@ bitflags! {
 }
 
 /// Dispatcher result marker
-pub trait DispatcherResult {}
+pub trait DispatcherResult {
+    fn as_intptr(&self) -> intptr_t;
+}
 
-impl DispatcherResult for String {}
-impl DispatcherResult for bool {}
-impl DispatcherResult for i32 {}
-impl DispatcherResult for u8 {}
-impl DispatcherResult for ParameterFlags {}
+impl DispatcherResult for String {
+    fn as_intptr(&self) -> intptr_t {
+        todo!()
+    }
+}
+impl DispatcherResult for bool {
+    fn as_intptr(&self) -> intptr_t {
+        todo!()
+    }
+}
+impl DispatcherResult for i32 {
+    fn as_intptr(&self) -> intptr_t {
+        todo!()
+    }
+}
+impl DispatcherResult for u8 {
+    fn as_intptr(&self) -> intptr_t {
+        todo!()
+    }
+}
+impl DispatcherResult for ParameterFlags {
+    fn as_intptr(&self) -> intptr_t {
+        self.bits()
+    }
+}
 
 /// if `Jog`, `StripJog`, `MarkerJumpJog`, `MarkerSelJog`, `Previous` or `Next` don't answer,
 /// `PreviousNext` will be tried. So it's best to implement at least `PreviousNext`.

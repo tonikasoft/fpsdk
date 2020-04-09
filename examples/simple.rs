@@ -1,13 +1,20 @@
-use fpsdk::{create_plugin, Host, HostMessage, Info, InfoBuilder, Plugin, DispatcherResult};
+use fpsdk::{create_plugin, DispatcherResult, Host, HostMessage, Info, InfoBuilder, Plugin};
+use std::cell::RefCell;
+use std::panic::AssertUnwindSafe;
 
 struct Test {
     host: Host,
     tag: i32,
+    data: AssertUnwindSafe<RefCell<i32>>,
 }
 
 impl Plugin for Test {
     fn new(host: Host, tag: i32) -> Self {
-        Self { host, tag }
+        Self {
+            host,
+            tag,
+            data: AssertUnwindSafe(RefCell::new(10)),
+        }
     }
 
     fn info(&self) -> Info {
