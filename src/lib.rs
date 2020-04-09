@@ -102,6 +102,8 @@ pub mod ffi {
 use std::ffi::c_void;
 use std::panic::RefUnwindSafe;
 
+use bitflags::bitflags;
+
 pub use ffi::{Info, MidiMessage, TimeSignature};
 
 /// Current FL SDK version.
@@ -145,10 +147,10 @@ pub struct Host {
 pub enum HostMessage<'a> {
     /// Contains the handle of the parent window if the editor has to be shown.
     ShowEditor(Option<*mut c_void>),
-    /// Change the processing mode flags. This can be ignored. See Processing Mode Flags
+    /// Change the processing mode flags. This can be ignored.
     ///
-    /// The value is the new flags.
-    ProcessMode(i32),
+    /// The value is [ProcessModeFlags](struct.ProcessModeFlags.html).
+    ProcessMode(ProcessModeFlags),
     /// The continuity of processing is broken. This means that the user has jumped ahead or back
     /// in the playlist, for example. When this happens, the plugin needs to clear all buffers and
     /// start like new
@@ -267,7 +269,8 @@ pub enum HostMessage<'a> {
     /// Retrieves info about a parameter.
     ///
     /// The value is the parameter number.
-    /// see [ParameterFlags](enum.ParameterFlags.html) for the result
+    ///
+    /// see [ParameterFlags](struct.ParameterFlags.html) for the result
     GetParamInfo(usize),
     /// Called after a project has been loaded, to leave a chance to kill automation (that could be
     /// loaded after the plugin is created) if necessary.
@@ -289,6 +292,43 @@ pub enum HostMessage<'a> {
     PreferredNumIo(u8),
 }
 
+bitflags! {
+    /// Parameter flags.
+    pub struct ParameterFlags: i32 {
+        /// Makes no sense to interpolate parameter values (when values are not levels).
+        const CANT_INTERPOLATE = 1;
+        /// Parameter is a normalized (0..1) single float. (Integer otherwise)
+        const FLOAT = 2;
+        /// Parameter appears centered in event editors.
+        const CENTERED = 4;
+    }
+}
+
+bitflags! {
+    /// Processing mode flags.
+    pub struct ProcessModeFlags: i32 {
+        /// Realtime rendering.
+        const NORMAL = 0;
+        /// Realtime rendering with a higher quality.
+        const HQ_REALTIME = 1;
+        /// Non realtime processing (CPU does not matter, quality does) (normally set when
+        /// rendering only).
+        const HQ_NON_REALTIME = 2;
+        /// FL is rendering to file if this flag is set.
+        const IS_RENDERING = 16;
+        /// (changed in FL 7.0) 3 bits value for interpolation quality 
+        ///
+        /// - 0=none (obsolete)
+        /// - 1=linear
+        /// - 2=6 point hermite (default)
+        /// - 3=32 points sinc
+        /// - 4=64 points sinc
+        /// - 5=128 points sinc
+        /// - 6=256 points sinc
+        const IP_MASK = 0xFFFF << 8;
+    }
+}
+
 /// Dispatcher result marker
 pub trait DispatcherResult {}
 
@@ -296,8 +336,7 @@ impl DispatcherResult for String {}
 impl DispatcherResult for bool {}
 impl DispatcherResult for i32 {}
 impl DispatcherResult for u8 {}
-//TODO
-// impl DispatcherResult for ParameterFlags {}
+impl DispatcherResult for ParameterFlags {}
 
 /// if `Jog`, `StripJog`, `MarkerJumpJog`, `MarkerSelJog`, `Previous` or `Next` don't answer,
 /// `PreviousNext` will be tried. So it's best to implement at least `PreviousNext`.
@@ -621,10 +660,7 @@ macro_rules! create_plugin {
             host: *mut $crate::ffi::TFruityPlugHost,
             tag: i32,
         ) -> *mut $crate::ffi::TFruityPlug {
-            let ho = $crate::Host {
-                version: 0,
-                flags: 0,
-            };
+            let ho = $crate::Host { version: 0 };
             let plugin = <$pl as $crate::Plugin>::new(ho, tag);
             let adapter = $crate::PluginAdapter(Box::new(plugin));
             $crate::ffi::create_plug_instance_c(&mut *host, tag, Box::new(adapter))
