@@ -66,6 +66,12 @@ pub mod ffi {
         pub num_out_voices: i32,
     }
 
+    pub struct TimeSignature {
+        pub steps_per_bar: i32,
+        pub steps_per_beat: i32,
+        pub ppq: i32,
+    }
+
     extern "C" {
         include!("wrapper.h");
 
@@ -89,7 +95,7 @@ pub mod ffi {
 use std::ffi::c_void;
 use std::panic::RefUnwindSafe;
 
-pub use ffi::Info;
+pub use ffi::{Info, TimeSignature};
 
 /// Current FL SDK version.
 pub const CURRENT_SDK_VERSION: i32 = 1;
@@ -108,7 +114,6 @@ fn plugin_info(adapter: &PluginAdapter) -> Info {
 /// This trait must be implemented for your plugin.
 pub trait Plugin: RefUnwindSafe {
     /// Initializer
-    // We can't just use Default inheritance, because we need to specify Sized marker for Self
     fn new(host: Host, tag: i32) -> Self
     where
         Self: Sized;
@@ -118,18 +123,19 @@ pub trait Plugin: RefUnwindSafe {
     /// function.
     ///
     /// See [`HostMessage`](enum.HostMessage.html) for possible messages.
-    fn on_message(&mut self, message: HostMessage) -> Box<dyn DispatcherResult>;
+    fn on_message(&mut self, message: HostMessage<'_>) -> Box<dyn DispatcherResult>;
 }
 
 /// Plugin host.
 #[derive(Debug)]
 pub struct Host {
+    /// The version of FL Studio. It is stored in one integer. If the version of FL Studio would be
+    /// 1.2.3 for example, `version` would be 1002003
     pub version: i32,
-    pub flags: i32,
 }
 
 /// Message from the host to the plugin
-pub enum HostMessage {
+pub enum HostMessage<'a> {
     /// Contains the handle of the parent window if the editor has to be shown.
     ShowEditor(Option<*mut c_void>),
     /// Change the processing mode flags. This can be ignored. See Processing Mode Flags
@@ -161,16 +167,16 @@ pub enum HostMessage {
     /// (not used yet) The host has noticed that too much processing power is used and asks the
     /// plugin to kill its weakest voice.
     ///
-    /// The plugin has to return `1` if it did anything, `0` otherwise
+    /// The plugin has to return `true` if it did anything, `false` otherwise
     KillVoice,
     /// Only full generators have to respond to this message. It's meant to allow the cutoff and
     /// resonance parameters of a voice to be used for other purposes, if the generator doesn't use
     /// them as cutoff and resonance.
     ///
-    /// - return `0` if the plugin doesn't support the default per-voice level value
-    /// - return `1` if the plugin supports the default per-voice level value (filter cutoff (0) or
+    /// - return `0u8` if the plugin doesn't support the default per-voice level value
+    /// - return `1u8` if the plugin supports the default per-voice level value (filter cutoff (0) or
     ///   filter resonance (1))
-    /// - return `2` if the plugin supports the per-voice level value, but for another function
+    /// - return `2u8` if the plugin supports the per-voice level value, but for another function
     ///   (then check FPN_VoiceLevel to provide your own names)
     UseVoiceLevels(u8),
     /// Called when the user selects a preset.
@@ -181,9 +187,8 @@ pub enum HostMessage {
     /// wavetable, in the same format as the WaveTables member of TFruityPlugin. Also see
     /// FPF_GetChanCustomShape.
     ///
-    /// The value holds a pointer to the new shape.
-    //TODO
-    ChanSampleChanged,
+    /// The value holds the new shape.
+    ChanSampleChanged(&'a [f32]),
     /// The host has enabled/disabled the plugin.
     ///
     /// The value will contain the new state (`false` for disabled, `true` for enabled)
@@ -200,15 +205,13 @@ pub enum HostMessage {
     SongPosChanged,
     /// The time signature has changed.
     ///
-    /// Value holds a pointer to a TTimeSigInfo structure (PTimeSigInfo) with the new information
-    //TODO
-    SetTimeSig,
+    /// The value is [`TimeSignature`](struct.TimeSignature.html).
+    SetTimeSig(TimeSignature),
     /// This is called to let the plugin tell the host which files need to be collected or put in
-    /// zip files. The name of the file is passed to the host as a pchar/char* in the result of the
-    /// dispatcher function. The host keeps calling this until the plugin returns zero.
+    /// zip files. The name of the file is passed to the host as a `String` in the result of the
+    /// dispatcher function.
     ///
     /// The value holds the file #, which starts at 0
-    //TODO
     CollectFile(u32),
     /// (private message to known plugins, ignore) tells the plugin to update a specific,
     /// non-automated param
@@ -235,16 +238,15 @@ pub enum HostMessage {
     ///
     /// The value holds the new time (milliseconds)
     SetIdleTime(u32),
-    /// (FL 7.0) The host has focused/unfocused the editor (focused in Value) (plugin can use this
-    /// to steal keyboard focus)
-    SetFocus,
+    /// (FL 7.0) The host has focused/unfocused the editor (focused in the value) (plugin can use
+    /// this to steal keyboard focus)
+    SetFocus(bool),
     /// (FL 8.0) This is sent by the host for special transport messages, from a controller.
     ///
-    /// The value is the type of message (see transport types)
+    /// The value is the type of message (see [Transport](enum.Transport.html))
     ///
-    /// Result should be 1 if handled, 0 otherwise
-    //TODO
-    Transport(u32),
+    /// Result should be `true` if handled, `false` otherwise
+    Transport(Transport),
     /// (FL 8.0) Live MIDI input preview. This allows the plugin to steal messages (mostly for
     /// transport purposes). Must return 1 if handled.
     ///
@@ -287,6 +289,115 @@ pub trait DispatcherResult {}
 
 impl DispatcherResult for bool {}
 impl DispatcherResult for i32 {}
+impl DispatcherResult for String {}
+impl DispatcherResult for u8 {}
+
+/// if `Jog`, `StripJog`, `MarkerJumpJog`, `MarkerSelJog`, `Previous` or `Next` don't answer,
+/// `PreviousNext` will be tried. So it's best to implement at least `PreviousNext`.
+///
+/// if `PunchIn` or `PunchOut` don't answer, `Punch` will be tried
+///
+/// if `UndoUp` doesn't answer, `UndoJog` will be tried
+///
+/// if `AddAltMarker` doesn't answer, `AddMarker` will be tried
+///
+/// if `Cut`, `Copy`, `Paste`, `Insert`, `Delete`, `NextWindow`, `Enter`, `Escape`, `Yes`, `No`,
+/// `Fx` don't answer, standard keystrokes will be simulated
+#[allow(missing_docs)]
+pub enum Transport {
+    /// Generic jog (can be used to select stuff).
+    Jog(Jog),
+    /// Alternate generic jog (can be used to relocate stuff).
+    Jog2(Jog),
+    /// Touch-sensitive jog strip, value will be in -65536..65536 for leftmost..rightmost.
+    Strip(Jog),
+    /// Touch-sensitive jog in jog mode.
+    StripJog(Jog),
+    /// Value will be `0` for release, 1,2 for 1,2 fingers centered mode, -1,-2 for 1,2 fingers jog
+    /// mode (will then send `StripJog`).
+    StripHold(Jog),
+    Previous(Button),
+    Next(Button),
+    /// Generic track selection.
+    PreviousNext(Jog),
+    /// Used to relocate items.
+    MoveJog(Jog),
+    /// Play/pause.
+    Play(Button),
+    Stop(Button),
+    Record(Button),
+    Rewind(Hold),
+    FastForward(Hold),
+    Loop(Button),
+    Mute(Button),
+    /// Generic or record mode.
+    Mode(Button),
+    /// Undo/redo last, or undo down in history.
+    Undo(Button),
+    /// Undo up in history (no need to implement if no undo history).
+    UndoUp(Button),
+    /// Undo in history (no need to implement if no undo history).
+    UndoJog(Jog),
+    /// Live selection.
+    Punch(Hold),
+    PunchIn(Button),
+    PunchOut(Button),
+    AddMarker(Button),
+    /// Add alternate marker.
+    AddAltMarker(Button),
+    /// Marker jump.
+    MarkerJumpJog(Jog),
+    /// Marker selection.
+    MarkerSelJog(Jog),
+    Up(Button),
+    Down(Button),
+    Left(Button),
+    Right(Button),
+    HZoomJog(Jog),
+    VZoomJog(Jog),
+    /// Snap on/off.
+    Snap(Button),
+    SnapMode(Jog),
+    Cut(Button),
+    Copy(Button),
+    Paste(Button),
+    Insert(Button),
+    Delete(Button),
+    /// TAB.
+    NextWindow(Button),
+    /// Window selection.
+    WindowJog(Jog),
+    F1(Button),
+    F2(Button),
+    F3(Button),
+    F4(Button),
+    F5(Button),
+    F6(Button),
+    F7(Button),
+    F8(Button),
+    F9(Button),
+    F10(Button),
+    /// Enter/accept.
+    Enter(Button),
+    /// Escape/cancel.
+    Escape(Button),
+    Yes(Button),
+    No(Button),
+    /// Generic menu.
+    Menu(Button),
+    /// Item edit/tool/contextual menu.
+    ItemMenu(Button),
+    Save(Button),
+    SaveNew(Button),
+}
+
+/// `0` for release, `1` for switch (if release is not supported), `2` for hold (if release should
+/// be expected).
+pub struct Button(pub u8);
+/// `false` for release, `true` for hold.
+pub struct Hold(pub bool);
+/// Value is an integer increment.
+pub struct Jog(pub i32);
 
 /// Use this to instantiate [`Info`](struct.Info.html)
 #[derive(Clone, Debug)]
@@ -507,7 +618,7 @@ macro_rules! create_plugin {
                 version: 0,
                 flags: 0,
             };
-            let mut plugin = <$pl as $crate::Plugin>::new(ho, tag);
+            let plugin = <$pl as $crate::Plugin>::new(ho, tag);
             let adapter = $crate::PluginAdapter(Box::new(plugin));
             $crate::ffi::create_plug_instance_c(&mut *host, tag, Box::new(adapter))
         }
