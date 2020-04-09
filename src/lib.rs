@@ -72,6 +72,13 @@ pub mod ffi {
         pub ppq: i32,
     }
 
+    pub struct MidiMessage {
+        pub status: u8,
+        pub data1: u8,
+        pub data2: u8,
+        pub port: u8,
+    }
+
     extern "C" {
         include!("wrapper.h");
 
@@ -95,7 +102,7 @@ pub mod ffi {
 use std::ffi::c_void;
 use std::panic::RefUnwindSafe;
 
-pub use ffi::{Info, TimeSignature};
+pub use ffi::{Info, MidiMessage, TimeSignature};
 
 /// Current FL SDK version.
 pub const CURRENT_SDK_VERSION: i32 = 1;
@@ -248,22 +255,20 @@ pub enum HostMessage<'a> {
     /// Result should be `true` if handled, `false` otherwise
     Transport(Transport),
     /// (FL 8.0) Live MIDI input preview. This allows the plugin to steal messages (mostly for
-    /// transport purposes). Must return 1 if handled.
+    /// transport purposes).
     ///
     /// The value has the packed MIDI message. Only note on/off for now.
     ///
-    /// Result should be 1 if handled, 0 otherwise
-    //TODO
-    MidiIn,
-    /// Mixer routing changed, must check FHD_GetInOuts if necessary
-    //TODO
+    /// Result should be `true` if handled, `false` otherwise
+    MidiIn(MidiMessage),
+    /// Mixer routing changed, must use
+    /// [`PluginMessage::GetInOuts`](enum.PluginMessage.html#variant.GetInOuts) if necessary
     RoutingChanged,
     /// Retrieves info about a parameter.
     ///
     /// The value is the parameter number.
-    /// see PI_Float for the result
-    //TODO
-    GetParamInfo(u32),
+    /// see [ParameterFlags](enum.ParameterFlags.html) for the result
+    GetParamInfo(usize),
     /// Called after a project has been loaded, to leave a chance to kill automation (that could be
     /// loaded after the plugin is created) if necessary.
     ProjLoaded,
@@ -279,18 +284,20 @@ pub enum HostMessage<'a> {
     ///
     /// Result has to be:
     ///
-    /// * `0` - default number
-    /// * `-1` - none
+    /// * `0i32` - default number
+    /// * `-1i32` - none
     PreferredNumIo(u8),
 }
 
 /// Dispatcher result marker
 pub trait DispatcherResult {}
 
+impl DispatcherResult for String {}
 impl DispatcherResult for bool {}
 impl DispatcherResult for i32 {}
-impl DispatcherResult for String {}
 impl DispatcherResult for u8 {}
+//TODO
+// impl DispatcherResult for ParameterFlags {}
 
 /// if `Jog`, `StripJog`, `MarkerJumpJog`, `MarkerSelJog`, `Previous` or `Next` don't answer,
 /// `PreviousNext` will be tried. So it's best to implement at least `PreviousNext`.
