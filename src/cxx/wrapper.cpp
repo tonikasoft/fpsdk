@@ -11,14 +11,14 @@ TFruityPlug &create_plug_instance_c(TFruityPlugHost &Host, int Tag,
   char *sname = new char[info.short_name.size() + 1];
   std::strcpy(sname, info.short_name.data());
 
-  PFruityPlugInfo c_info = new TFruityPlugInfo{info.sdk_version,
+  PFruityPlugInfo c_info = new TFruityPlugInfo{(int)info.sdk_version,
                                                lname,
                                                sname,
-                                               info.flags,
-                                               info.num_params,
-                                               info.def_poly,
-                                               info.num_out_ctrls,
-                                               info.num_out_voices};
+                                               (int)info.flags,
+                                               (int)info.num_params,
+                                               (int)info.def_poly,
+                                               (int)info.num_out_ctrls,
+                                               (int)info.num_out_voices};
 
   PluginWrapper *wrapper = new PluginWrapper(&Host, Tag, *adapter, c_info);
 
@@ -72,38 +72,12 @@ void _stdcall PluginWrapper::SaveRestoreState(IStream *Stream, BOOL Save) {
   }
 }
 
-//----------------
-//
-//----------------
 intptr_t _stdcall PluginWrapper::Dispatcher(intptr_t ID, intptr_t Index,
                                             intptr_t Value) {
-  // if( ID == FPD_ShowEditor )
-  // {
-  // if (Value == 0)
-  // {
-  // // close editor
-  // delete _editor;
-  // _editor = nullptr;
-  // EditorHandle = 0;
-  // }
-  // else if( EditorHandle == 0 )
-  // {
-  // if (_editor == nullptr)
-  // {
-  // // first
-  // _editor = new sample_editor(this, reinterpret_cast<HWND>(Value));
-  // }
-  //
-  // // open editor
-  // EditorHandle = reinterpret_cast<HWND>(_editor->getHWND());
-  // }
-  // else
-  // {
-  // // change parent window ?
-  // ::SetParent(EditorHandle, reinterpret_cast<HWND>(Value));
-  // }
-  // }
-  return 0;
+  Message message = {ID, Index, Value};
+  rust::Box<PluginAdapter> *boxed_adap = new rust::Box<PluginAdapter>(*adapter);
+
+  return plugin_dispatcher(*boxed_adap, message);
 }
 
 //----------------

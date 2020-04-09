@@ -49,27 +49,27 @@ pub mod ffi {
     pub struct Info {
         /// This has to be the version of the SDK used to create the plugin. This value is
         /// available in the constant CurrentSDKVersion
-        pub sdk_version: i32,
+        pub sdk_version: u32,
         /// The name of the plugin dll, without the extension (.dll)
         pub long_name: String,
         /// Short plugin name, to be used in labels to tell the user which plugin he is working
         /// with
         pub short_name: String,
-        flags: i32,
+        flags: u32,
         /// The number of parameters for this plugin
-        pub num_params: i32,
+        pub num_params: u32,
         /// Preferred (default) maximum polyphony (FL Studio manages the polyphony) (0=infinite)
-        pub def_poly: i32,
+        pub def_poly: u32,
         /// Number of internal output controllers
-        pub num_out_ctrls: i32,
+        pub num_out_ctrls: u32,
         /// Number of internal output voices
-        pub num_out_voices: i32,
+        pub num_out_voices: u32,
     }
 
     pub struct TimeSignature {
-        pub steps_per_bar: i32,
-        pub steps_per_beat: i32,
-        pub ppq: i32,
+        pub steps_per_bar: u32,
+        pub steps_per_beat: u32,
+        pub ppq: u32,
     }
 
     pub struct MidiMessage {
@@ -115,7 +115,7 @@ use libc::intptr_t;
 pub use ffi::{Info, MidiMessage, TimeSignature};
 
 /// Current FL SDK version.
-pub const CURRENT_SDK_VERSION: i32 = 1;
+pub const CURRENT_SDK_VERSION: u32 = 1;
 
 /// As far as we can't use trait objects to share them with C++, we need a concrete type. This type
 /// wraps user's plugin as a delegate and calls its methods.
@@ -308,7 +308,9 @@ pub enum HostMessage<'a> {
 
 impl From<ffi::Message> for HostMessage<'_> {
     fn from(message: ffi::Message) -> Self {
-        todo!()
+        match message.id {
+            _ => HostMessage::Unknown
+        }
     }
 }
 
@@ -351,17 +353,20 @@ bitflags! {
 
 /// Dispatcher result marker
 pub trait DispatcherResult {
+    /// Dispatcher result type should implement this method for interoperability with FL API.
     fn as_intptr(&self) -> intptr_t;
 }
 
 impl DispatcherResult for String {
     fn as_intptr(&self) -> intptr_t {
+        // return slices until the end, then return 0
+        // read the FL SDK docs for more
         todo!()
     }
 }
 impl DispatcherResult for bool {
     fn as_intptr(&self) -> intptr_t {
-        todo!()
+        (self.to_owned() as u8).into()
     }
 }
 impl DispatcherResult for i32 {
@@ -371,7 +376,7 @@ impl DispatcherResult for i32 {
 }
 impl DispatcherResult for u8 {
     fn as_intptr(&self) -> intptr_t {
-        todo!()
+        self.to_owned().into()
     }
 }
 impl DispatcherResult for ParameterFlags {
@@ -490,21 +495,21 @@ pub struct Jog(pub i32);
 /// Use this to instantiate [`Info`](struct.Info.html)
 #[derive(Clone, Debug)]
 pub struct InfoBuilder {
-    sdk_version: i32,
+    sdk_version: u32,
     long_name: String,
     short_name: String,
-    flags: i32,
-    num_params: i32,
-    def_poly: i32,
-    num_out_ctrls: i32,
-    num_out_voices: i32,
+    flags: u32,
+    num_params: u32,
+    def_poly: u32,
+    num_out_ctrls: u32,
+    num_out_voices: u32,
 }
 
 impl InfoBuilder {
     /// Initializer for an effect.
     ///
     /// This is the most basic type.
-    pub fn new_effect(long_name: &str, short_name: &str, num_params: i32) -> Self {
+    pub fn new_effect(long_name: &str, short_name: &str, num_params: u32) -> Self {
         Self {
             sdk_version: CURRENT_SDK_VERSION,
             long_name: long_name.to_string(),
@@ -522,7 +527,7 @@ impl InfoBuilder {
     ///
     /// This is a combination of [`generator`](struct.InfoBuilder.html#method.generator) and
     /// [`note_input`](struct.InfoBuilder.html#method.get_note_input).
-    pub fn new_full_gen(long_name: &str, short_name: &str, num_params: i32) -> Self {
+    pub fn new_full_gen(long_name: &str, short_name: &str, num_params: u32) -> Self {
         InfoBuilder::new_effect(long_name, short_name, num_params)
             .generator()
             .get_note_input()
@@ -532,31 +537,31 @@ impl InfoBuilder {
     ///
     /// It's a full generator with [`use_sampler`](struct.InfoBuilder.html#method.use_sampler)
     /// option.
-    pub fn new_hybrid_gen(long_name: &str, short_name: &str, num_params: i32) -> Self {
+    pub fn new_hybrid_gen(long_name: &str, short_name: &str, num_params: u32) -> Self {
         InfoBuilder::new_full_gen(long_name, short_name, num_params).use_sampler()
     }
 
     /// Initializer for a purely visual plugin, that doesn't process any audio data.
     ///
     /// It's a basic plugin with [`no_process`](struct.InfoBuilder.html#method.no_process) enabled.
-    pub fn new_visual(long_name: &str, short_name: &str, num_params: i32) -> Self {
+    pub fn new_visual(long_name: &str, short_name: &str, num_params: u32) -> Self {
         InfoBuilder::new_effect(long_name, short_name, num_params).no_process()
     }
 
     /// Set prefered (default) maximum polyphony.
-    pub fn with_poly(mut self, poly: i32) -> Self {
+    pub fn with_poly(mut self, poly: u32) -> Self {
         self.def_poly = poly;
         self
     }
 
     /// Set number of internal output controllers.
-    pub fn with_out_ctrls(mut self, out_ctrls: i32) -> Self {
+    pub fn with_out_ctrls(mut self, out_ctrls: u32) -> Self {
         self.num_out_ctrls = out_ctrls;
         self
     }
 
     /// Set number of internal output voices.
-    pub fn with_out_voices(mut self, out_voices: i32) -> Self {
+    pub fn with_out_voices(mut self, out_voices: u32) -> Self {
         self.num_out_voices = out_voices;
         self
     }
