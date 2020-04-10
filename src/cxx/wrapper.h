@@ -3,6 +3,13 @@
 #include "../../target/cxxbridge/rust/cxx.h"
 #include "fp_plugclass.h"
 
+#ifdef _WIN32
+// TODO 
+// remove when this merged: 
+// https://github.com/dtolnay/cxx/pull/96
+#define ssize_t SSIZE_T
+#endif
+
 struct PluginAdapter;
 
 class sample_editor {};
