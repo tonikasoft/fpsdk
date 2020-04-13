@@ -1,5 +1,5 @@
 #include "wrapper.h"
-#include "../../target/cxxbridge/src/lib.rs.h"
+#include "src/lib.rs.h"
 #include <cstring>
 
 TFruityPlug &create_plug_instance_c(TFruityPlugHost &Host, int Tag,
@@ -74,10 +74,11 @@ void _stdcall PluginWrapper::SaveRestoreState(IStream *Stream, BOOL Save) {
 
 intptr_t _stdcall PluginWrapper::Dispatcher(intptr_t ID, intptr_t Index,
                                             intptr_t Value) {
-  Message message = {ID, Index, Value};
-  rust::Box<PluginAdapter> *boxed_adap = new rust::Box<PluginAdapter>(*adapter);
-
-  return plugin_dispatcher(*boxed_adap, message);
+  // Message message = {ID, Index, Value};
+  // rust::Box<PluginAdapter> *boxed_adap = new rust::Box<PluginAdapter>(*adapter);
+// 
+  // return plugin_dispatcher(*boxed_adap, message);
+  return 0;
 }
 
 //----------------

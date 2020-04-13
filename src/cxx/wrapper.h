@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../target/cxxbridge/rust/cxx.h"
+#include "rust/cxx.h"
 #include "fp_plugclass.h"
 
 struct PluginAdapter;
