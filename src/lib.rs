@@ -76,7 +76,8 @@ pub mod ffi {
         pub status: u8,
         pub data1: u8,
         pub data2: u8,
-        pub port: u8,
+        /// -1 if not applicable
+        pub port: i32,
     }
 
     pub struct Message {
@@ -96,26 +97,37 @@ pub mod ffi {
             tag: i32,
             adapter: Box<PluginAdapter>,
         ) -> &'static mut TFruityPlug;
+
+        pub fn time_sig_from_raw(raw_time_sig: isize) -> TimeSignature;
     }
 
     extern "Rust" {
         type PluginAdapter;
 
         fn plugin_info(adapter: &PluginAdapter) -> Info;
-        fn plugin_dispatcher(mut adapter: Box<PluginAdapter>, message: Message) -> isize;
     }
 }
 
-use std::ffi::c_void;
-use std::panic::RefUnwindSafe;
+mod host;
+mod plugin;
+
+use std::ffi::CString;
 
 use bitflags::bitflags;
-use libc::intptr_t;
 
 pub use ffi::{Info, MidiMessage, TimeSignature};
+pub use host::*;
+pub use plugin::*;
 
 /// Current FL SDK version.
 pub const CURRENT_SDK_VERSION: u32 = 1;
+
+/// Size of wavetable used by FL.
+pub const WAVETABLE_SIZE: usize = 16384;
+
+/// intptr_t alias
+#[allow(non_camel_case_types)]
+pub type intptr_t = isize;
 
 /// As far as we can't use trait objects to share them with C++, we need a concrete type. This type
 /// wraps user's plugin as a delegate and calls its methods.
@@ -128,190 +140,21 @@ fn plugin_info(adapter: &PluginAdapter) -> Info {
     adapter.0.info()
 }
 
-fn plugin_dispatcher(mut adapter: Box<PluginAdapter>, message: ffi::Message) -> intptr_t {
-    adapter.0.on_message(HostMessage::from(message)).as_intptr()
-}
-
-/// This trait must be implemented for your plugin.
-pub trait Plugin: RefUnwindSafe {
-    /// Initializer
-    fn new(host: Host, tag: i32) -> Self
-    where
-        Self: Sized;
-    /// Get plugin [`Info`](struct.Info.html)
-    fn info(&self) -> Info;
-    /// The host calls this function to request something that isn't done in a specialized
-    /// function.
-    ///
-    /// See [`HostMessage`](enum.HostMessage.html) for possible messages.
-    fn on_message(&mut self, message: HostMessage<'_>) -> Box<dyn DispatcherResult>;
-}
-
-/// Plugin host.
-#[derive(Debug)]
-pub struct Host {
-    /// The version of FL Studio. It is stored in one integer. If the version of FL Studio would be
-    /// 1.2.3 for example, `version` would be 1002003
-    pub version: i32,
-}
-
-/// Message from the host to the plugin
-pub enum HostMessage<'a> {
-    /// Contains the handle of the parent window if the editor has to be shown.
-    ShowEditor(Option<*mut c_void>),
-    /// Change the processing mode flags. This can be ignored.
-    ///
-    /// The value is [ProcessModeFlags](struct.ProcessModeFlags.html).
-    ProcessMode(ProcessModeFlags),
-    /// The continuity of processing is broken. This means that the user has jumped ahead or back
-    /// in the playlist, for example. When this happens, the plugin needs to clear all buffers and
-    /// start like new
-    ///
-    /// **Warning: this can be called from the mixer thread!**
-    Flush,
-    /// This changes the maximum processing length, expressed in samples.
-    ///
-    /// The value is the new length.
-    SetBlockSize(u32),
-    /// This changes the sample rate.
-    ///
-    /// Value holds the new sample rate
-    SetSampleRate(u32),
-    /// This allows the plugin to define how the editor window should be resized.
-    ///
-    /// The first value will hold a pointer to a rectangle for the minimum (Left and Top) and
-    /// maximum (Right and Bottom) width and height of the window
-    ///
-    /// The second value holds a pointer to a point structure that defines by how much the window
-    /// size should change horizontally and vertically when the user drags the border.
-    WindowMinMax(*mut c_void, *mut c_void),
-    /// (not used yet) The host has noticed that too much processing power is used and asks the
-    /// plugin to kill its weakest voice.
-    ///
-    /// The plugin has to return `true` if it did anything, `false` otherwise
-    KillVoice,
-    /// Only full generators have to respond to this message. It's meant to allow the cutoff and
-    /// resonance parameters of a voice to be used for other purposes, if the generator doesn't use
-    /// them as cutoff and resonance.
-    ///
-    /// - return `0u8` if the plugin doesn't support the default per-voice level value
-    /// - return `1u8` if the plugin supports the default per-voice level value (filter cutoff (0) or
-    ///   filter resonance (1))
-    /// - return `2u8` if the plugin supports the per-voice level value, but for another function
-    ///   (then check FPN_VoiceLevel to provide your own names)
-    UseVoiceLevels(u8),
-    /// Called when the user selects a preset.
-    ///
-    /// The value tells you which one to set.
-    SetPreset(u32),
-    /// A sample has been loaded into the parent channel. This is given to the plugin as a
-    /// wavetable, in the same format as the WaveTables member of TFruityPlugin. Also see
-    /// FPF_GetChanCustomShape.
-    ///
-    /// The value holds the new shape.
-    ChanSampleChanged(&'a [f32]),
-    /// The host has enabled/disabled the plugin.
-    ///
-    /// The value will contain the new state (`false` for disabled, `true` for enabled)
-    ///
-    /// **Warning: this can be called from the mixer thread!**
-    SetEnabled(bool),
-    /// The host is playing (song pos info is valid when playing) or stopped (state in the value)
-    ///
-    /// **Warning: can be called from the mixing thread**
-    SetPlaying(bool, u32),
-    /// The song position has jumped from one position to another non-consecutive position
-    ///
-    /// **Warning: can be called from the mixing thread**
-    SongPosChanged,
-    /// The time signature has changed.
-    ///
-    /// The value is [`TimeSignature`](struct.TimeSignature.html).
-    SetTimeSig(TimeSignature),
-    /// This is called to let the plugin tell the host which files need to be collected or put in
-    /// zip files. The name of the file is passed to the host as a `String` in the result of the
-    /// dispatcher function.
-    ///
-    /// The value holds the file #, which starts at 0
-    CollectFile(u32),
-    /// (private message to known plugins, ignore) tells the plugin to update a specific,
-    /// non-automated param
-    SetInternalParam,
-    /// This tells the plugin how many send tracks there are (fixed to 4, but could be set by the
-    /// user at any time in a future update)
-    ///
-    /// The value holds the number of send tracks
-    SetNumSends(u32),
-    /// Called when a file has been dropped onto the parent channel's button.
-    ///
-    /// The value holds filename.
-    LoadFile(String),
-    /// Set fit to time in beats
-    ///
-    /// The value holds the time.
-    SetFitTime(f32),
-    /// Sets the number of samples in each tick. This value changes when the tempo, ppq or sample
-    /// rate have changed.
-    ///
-    /// **Warning: can be called from the mixing thread**
-    SetSamplesPerTick(u32),
-    /// Sets the frequency at which Idle is called.
-    ///
-    /// The value holds the new time (milliseconds)
-    SetIdleTime(u32),
-    /// (FL 7.0) The host has focused/unfocused the editor (focused in the value) (plugin can use
-    /// this to steal keyboard focus)
-    SetFocus(bool),
-    /// (FL 8.0) This is sent by the host for special transport messages, from a controller.
-    ///
-    /// The value is the type of message (see [Transport](enum.Transport.html))
-    ///
-    /// Result should be `true` if handled, `false` otherwise
-    Transport(Transport),
-    /// (FL 8.0) Live MIDI input preview. This allows the plugin to steal messages (mostly for
-    /// transport purposes).
-    ///
-    /// The value has the packed MIDI message. Only note on/off for now.
-    ///
-    /// Result should be `true` if handled, `false` otherwise
-    MidiIn(MidiMessage),
-    /// Mixer routing changed, must use
-    /// [`PluginMessage::GetInOuts`](enum.PluginMessage.html#variant.GetInOuts) if necessary
-    RoutingChanged,
-    /// Retrieves info about a parameter.
-    ///
-    /// The value is the parameter number.
-    ///
-    /// see [ParameterFlags](struct.ParameterFlags.html) for the result
-    GetParamInfo(usize),
-    /// Called after a project has been loaded, to leave a chance to kill automation (that could be
-    /// loaded after the plugin is created) if necessary.
-    ProjLoaded,
-    /// (private message to the plugin wrapper) Load a (VST, DX) plugin state,
-    ///
-    /// WrapperLoadState,
-    ShowSettings,
-    /// Input (the first value)/output (the second value) latency of the output, in samples (only
-    /// for information)
-    SetIoLatency(u32, u32),
-    /// (message from Patcher) retrieves the preferred number of audio inputs (the value is `0`),
-    /// audio outputs (the value is `1`) or voice outputs (the value is `2`)
-    ///
-    /// Result has to be:
-    ///
-    /// * `0i32` - default number
-    /// * `-1i32` - none
-    PreferredNumIo(u8),
-    /// Unknown message.
-    Unknown,
-}
-
-impl From<ffi::Message> for HostMessage<'_> {
-    fn from(message: ffi::Message) -> Self {
-        match message.id {
-            _ => HostMessage::Unknown
-        }
-    }
+/// Interface with C++, which suppose to be used internally. Don't use it directly.
+///
+/// # Safety
+///
+/// Unsafe
+#[doc(hidden)]
+#[no_mangle]
+pub unsafe extern "C" fn plugin_dispatcher(
+    adapter: *mut PluginAdapter,
+    message: ffi::Message,
+) -> intptr_t {
+    (*adapter)
+        .0
+        .on_message(HostMessage::from(message))
+        .as_intptr()
 }
 
 bitflags! {
@@ -328,7 +171,7 @@ bitflags! {
 
 bitflags! {
     /// Processing mode flags.
-    pub struct ProcessModeFlags: i32 {
+    pub struct ProcessModeFlags: isize {
         /// Realtime rendering.
         const NORMAL = 0;
         /// Realtime rendering with a higher quality.
@@ -351,7 +194,7 @@ bitflags! {
     }
 }
 
-/// Dispatcher result marker
+/// The result returned from dispatcher function.
 pub trait DispatcherResult {
     /// Dispatcher result type should implement this method for interoperability with FL API.
     fn as_intptr(&self) -> intptr_t;
@@ -359,26 +202,30 @@ pub trait DispatcherResult {
 
 impl DispatcherResult for String {
     fn as_intptr(&self) -> intptr_t {
-        // return slices until the end, then return 0
-        // read the FL SDK docs for more
-        todo!()
+        let value = CString::new(self.as_str()).expect("Unexpected CString::new failure");
+        // will the value still live when we return the pointer?
+        value.as_ptr().to_owned() as intptr_t
     }
 }
+
 impl DispatcherResult for bool {
     fn as_intptr(&self) -> intptr_t {
         (self.to_owned() as u8).into()
     }
 }
+
 impl DispatcherResult for i32 {
     fn as_intptr(&self) -> intptr_t {
         todo!()
     }
 }
+
 impl DispatcherResult for u8 {
     fn as_intptr(&self) -> intptr_t {
         self.to_owned().into()
     }
 }
+
 impl DispatcherResult for ParameterFlags {
     fn as_intptr(&self) -> intptr_t {
         self.bits()
@@ -482,6 +329,75 @@ pub enum Transport {
     ItemMenu(Button),
     Save(Button),
     SaveNew(Button),
+    Unknown,
+}
+
+impl From<ffi::Message> for Transport {
+    fn from(message: ffi::Message) -> Self {
+        match message.index {
+            0 => Transport::Jog(Jog(message.value as i64)),
+            1 => Transport::Jog2(Jog(message.value as i64)),
+            2 => Transport::Strip(Jog(message.value as i64)),
+            3 => Transport::StripJog(Jog(message.value as i64)),
+            4 => Transport::StripHold(Jog(message.value as i64)),
+            5 => Transport::Previous(Button(message.value as u8)),
+            6 => Transport::Next(Button(message.value as u8)),
+            7 => Transport::PreviousNext(Jog(message.value as i64)),
+            8 => Transport::MoveJog(Jog(message.value as i64)),
+            10 => Transport::Play(Button(message.value as u8)),
+            11 => Transport::Stop(Button(message.value as u8)),
+            12 => Transport::Record(Button(message.value as u8)),
+            13 => Transport::Rewind(Hold(message.value != 0)),
+            14 => Transport::FastForward(Hold(message.value != 0)),
+            15 => Transport::Loop(Button(message.value as u8)),
+            16 => Transport::Mute(Button(message.value as u8)),
+            17 => Transport::Mode(Button(message.value as u8)),
+            20 => Transport::Undo(Button(message.value as u8)),
+            21 => Transport::UndoUp(Button(message.value as u8)),
+            22 => Transport::UndoJog(Jog(message.value as i64)),
+            30 => Transport::Punch(Hold(message.value != 0)),
+            31 => Transport::PunchIn(Button(message.value as u8)),
+            32 => Transport::PunchOut(Button(message.value as u8)),
+            33 => Transport::AddMarker(Button(message.value as u8)),
+            34 => Transport::AddAltMarker(Button(message.value as u8)),
+            35 => Transport::MarkerJumpJog(Jog(message.value as i64)),
+            36 => Transport::MarkerSelJog(Jog(message.value as i64)),
+            40 => Transport::Up(Button(message.value as u8)),
+            41 => Transport::Down(Button(message.value as u8)),
+            42 => Transport::Left(Button(message.value as u8)),
+            43 => Transport::Right(Button(message.value as u8)),
+            44 => Transport::HZoomJog(Jog(message.value as i64)),
+            45 => Transport::VZoomJog(Jog(message.value as i64)),
+            48 => Transport::Snap(Button(message.value as u8)),
+            49 => Transport::SnapMode(Jog(message.value as i64)),
+            50 => Transport::Cut(Button(message.value as u8)),
+            51 => Transport::Copy(Button(message.value as u8)),
+            52 => Transport::Paste(Button(message.value as u8)),
+            53 => Transport::Insert(Button(message.value as u8)),
+            54 => Transport::Delete(Button(message.value as u8)),
+            58 => Transport::NextWindow(Button(message.value as u8)),
+            59 => Transport::WindowJog(Jog(message.value as i64)),
+            60 => Transport::F1(Button(message.value as u8)),
+            61 => Transport::F2(Button(message.value as u8)),
+            62 => Transport::F3(Button(message.value as u8)),
+            63 => Transport::F4(Button(message.value as u8)),
+            64 => Transport::F5(Button(message.value as u8)),
+            65 => Transport::F6(Button(message.value as u8)),
+            66 => Transport::F7(Button(message.value as u8)),
+            67 => Transport::F8(Button(message.value as u8)),
+            68 => Transport::F9(Button(message.value as u8)),
+            69 => Transport::F10(Button(message.value as u8)),
+            80 => Transport::Enter(Button(message.value as u8)),
+            81 => Transport::Escape(Button(message.value as u8)),
+            82 => Transport::Yes(Button(message.value as u8)),
+            83 => Transport::No(Button(message.value as u8)),
+            90 => Transport::Menu(Button(message.value as u8)),
+            91 => Transport::ItemMenu(Button(message.value as u8)),
+            92 => Transport::Save(Button(message.value as u8)),
+            93 => Transport::SaveNew(Button(message.value as u8)),
+            _ => Transport::Unknown,
+        }
+    }
 }
 
 /// `0` for release, `1` for switch (if release is not supported), `2` for hold (if release should
@@ -490,7 +406,7 @@ pub struct Button(pub u8);
 /// `false` for release, `true` for hold.
 pub struct Hold(pub bool);
 /// Value is an integer increment.
-pub struct Jog(pub i32);
+pub struct Jog(pub i64);
 
 /// Use this to instantiate [`Info`](struct.Info.html)
 #[derive(Clone, Debug)]
@@ -692,6 +608,17 @@ impl InfoBuilder {
             def_poly: self.def_poly,
             num_out_ctrls: self.num_out_ctrls,
             num_out_voices: self.num_out_voices,
+        }
+    }
+}
+
+impl From<u64> for MidiMessage {
+    fn from(value: u64) -> Self {
+        MidiMessage {
+            status: (value & 0xff) as u8,
+            data1: ((value >> 8) & 0xff) as u8,
+            data2: ((value >> 16) & 0xff) as u8,
+            port: -1,
         }
     }
 }

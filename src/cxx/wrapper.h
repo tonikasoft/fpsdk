@@ -1,9 +1,11 @@
 #pragma once
 
-#include "rust/cxx.h"
 #include "fp_plugclass.h"
+#include "rust/cxx.h"
 
 struct PluginAdapter;
+struct Message;
+struct TimeSignature;
 
 class sample_editor {};
 
@@ -59,3 +61,7 @@ protected:
 
 TFruityPlug &create_plug_instance_c(TFruityPlugHost &Host, int Tag,
                                     rust::Box<PluginAdapter> adapter);
+TimeSignature time_sig_from_raw(intptr_t raw_time_sig);
+
+// Unsafe Rust functions
+extern "C" intptr_t plugin_dispatcher(PluginAdapter *adapter, Message message);

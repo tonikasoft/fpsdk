@@ -9,7 +9,6 @@ edition = "2018"
 [dependencies]
 bitflags = "1.2"
 cxx = "0.2"
-libc = "0.2"
 
 [build-dependencies]
 cxx = "0.2"

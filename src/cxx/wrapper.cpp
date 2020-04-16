@@ -74,11 +74,9 @@ void _stdcall PluginWrapper::SaveRestoreState(IStream *Stream, BOOL Save) {
 
 intptr_t _stdcall PluginWrapper::Dispatcher(intptr_t ID, intptr_t Index,
                                             intptr_t Value) {
-  // Message message = {ID, Index, Value};
-  // rust::Box<PluginAdapter> *boxed_adap = new rust::Box<PluginAdapter>(*adapter);
-// 
-  // return plugin_dispatcher(*boxed_adap, message);
-  return 0;
+  Message message = {ID, Index, Value};
+
+  return plugin_dispatcher(adapter, message);
 }
 
 //----------------
@@ -191,3 +189,11 @@ int _stdcall PluginWrapper::OutputVoice_ProcessEvent(TOutVoiceHandle Handle,
 }
 
 void _stdcall PluginWrapper::OutputVoice_Kill(TVoiceHandle Handle) {}
+
+TimeSignature time_sig_from_raw(intptr_t raw_time_sig) {
+  PTimeSigInfo time_sig = (TTimeSigInfo *)raw_time_sig;
+
+  return TimeSignature{(uint32_t)time_sig->StepsPerBar,
+                       (uint32_t)time_sig->StepsPerBeat,
+                       (uint32_t)time_sig->PPQ};
+}
