@@ -13,6 +13,10 @@ cxx = "0.2"
 [build-dependencies]
 cxx = "0.2"
 
+[dev-dependencies]
+log = "0.4"
+simplelog = "0.7"
+
 [[example]]
 name = "simple"
 path = "examples/simple.rs"

@@ -112,6 +112,7 @@ mod host;
 mod plugin;
 
 use std::ffi::CString;
+use std::fmt;
 
 use bitflags::bitflags;
 
@@ -151,10 +152,11 @@ pub unsafe extern "C" fn plugin_dispatcher(
     adapter: *mut PluginAdapter,
     message: ffi::Message,
 ) -> intptr_t {
-    (*adapter)
-        .0
-        .on_message(HostMessage::from(message))
-        .as_intptr()
+    // (*adapter)
+        // .0
+        // .on_message(HostMessage::from(message))
+        // .as_intptr()
+        0
 }
 
 bitflags! {
@@ -244,6 +246,7 @@ impl DispatcherResult for ParameterFlags {
 /// if `Cut`, `Copy`, `Paste`, `Insert`, `Delete`, `NextWindow`, `Enter`, `Escape`, `Yes`, `No`,
 /// `Fx` don't answer, standard keystrokes will be simulated
 #[allow(missing_docs)]
+#[derive(Debug)]
 pub enum Transport {
     /// Generic jog (can be used to select stuff).
     Jog(Jog),
@@ -402,10 +405,15 @@ impl From<ffi::Message> for Transport {
 
 /// `0` for release, `1` for switch (if release is not supported), `2` for hold (if release should
 /// be expected).
+#[derive(Debug)]
 pub struct Button(pub u8);
+
 /// `false` for release, `true` for hold.
+#[derive(Debug)]
 pub struct Hold(pub bool);
+
 /// Value is an integer increment.
+#[derive(Debug)]
 pub struct Jog(pub i64);
 
 /// Use this to instantiate [`Info`](struct.Info.html)
@@ -620,6 +628,27 @@ impl From<u64> for MidiMessage {
             data2: ((value >> 16) & 0xff) as u8,
             port: -1,
         }
+    }
+}
+
+impl fmt::Debug for MidiMessage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MidiMessage")
+         .field("status", &self.status)
+         .field("data1", &self.data1)
+         .field("data2", &self.data2)
+         .field("port", &self.port)
+         .finish()
+    }
+}
+
+impl fmt::Debug for TimeSignature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TimeSignature")
+         .field("steps_per_bar", &self.steps_per_bar)
+         .field("steps_per_beat", &self.steps_per_beat)
+         .field("ppq", &self.ppq)
+         .finish()
     }
 }
 

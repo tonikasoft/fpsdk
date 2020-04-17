@@ -12,6 +12,7 @@ pub struct Host {
 }
 
 /// Message from the host to the plugin
+#[derive(Debug)]
 pub enum HostMessage<'a> {
     /// Contains the handle of the parent window if the editor has to be shown.
     ShowEditor(Option<*mut c_void>),
