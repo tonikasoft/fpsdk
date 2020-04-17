@@ -27,5 +27,6 @@ To install it:
 
 Check out the corresponding script for your system for usage notes.
 
-The plugin's log file is created at FL's resources root. It's 
-`/Applications/FL Studio 20.app/Contents/Resources/FL` for macOS.
+The plugin's log file is created at FL's resources root. It's `/Applications/FL
+Studio 20.app/Contents/Resources/FL` for macOS and `<Drive>:\Program
+Files\Image-Line\FL Studio 20` for Windows.
