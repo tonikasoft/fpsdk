@@ -9,6 +9,7 @@ use fpsdk::{create_plugin, DispatcherResult, Host, HostMessage, Info, InfoBuilde
 
 const LOG_PATH: &str = "simple.log";
 
+#[derive(Debug)]
 struct Test {
     host: Host,
     tag: i32,

@@ -11,7 +11,7 @@ class sample_editor {};
 
 class PluginWrapper : public TFruityPlug {
 public:
-  PluginWrapper(TFruityPlugHost *Host, int Tag, PluginAdapter &adapter,
+  PluginWrapper(TFruityPlugHost *Host, int Tag, PluginAdapter *adapter,
                 PFruityPlugInfo info);
   virtual ~PluginWrapper();
 

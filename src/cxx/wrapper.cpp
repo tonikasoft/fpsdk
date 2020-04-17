@@ -7,9 +7,9 @@ TFruityPlug &create_plug_instance_c(TFruityPlugHost &Host, int Tag,
   Info info = plugin_info(*adapter);
 
   char *lname = new char[info.long_name.size() + 1];
-  std::strcpy(lname, info.long_name.data());
+  strcpy(lname, info.long_name.data());
   char *sname = new char[info.short_name.size() + 1];
-  std::strcpy(sname, info.short_name.data());
+  strcpy(sname, info.short_name.data());
 
   PFruityPlugInfo c_info = new TFruityPlugInfo{(int)info.sdk_version,
                                                lname,
@@ -20,19 +20,20 @@ TFruityPlug &create_plug_instance_c(TFruityPlugHost &Host, int Tag,
                                                (int)info.num_out_ctrls,
                                                (int)info.num_out_voices};
 
-  PluginWrapper *wrapper = new PluginWrapper(&Host, Tag, *adapter, c_info);
+  PluginWrapper *wrapper =
+      new PluginWrapper(&Host, Tag, adapter.into_raw(), c_info);
 
   return *((TFruityPlug *)wrapper);
 }
 
 PluginWrapper::PluginWrapper(TFruityPlugHost *Host, int Tag,
-                             PluginAdapter &adap, PFruityPlugInfo info) {
+                             PluginAdapter *adap, PFruityPlugInfo info) {
   Info = info;
   HostTag = Tag;
   EditorHandle = 0;
   _host = Host;
   _editor = nullptr;
-  adapter = &adap;
+  adapter = adap;
 
   // parameter initialze
   _gain = 0.25;
@@ -43,7 +44,8 @@ PluginWrapper::~PluginWrapper() {
   delete _editor;
   delete Info->LongName;
   delete Info->ShortName;
-  delete Info;
+  free(Info);
+  free(adapter);
 }
 
 //-------------------------

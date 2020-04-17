@@ -1,6 +1,8 @@
 use std::ffi::{c_void, CStr};
 use std::os::raw::c_char;
 
+use log::debug;
+
 use crate::{ffi, MidiMessage, ProcessModeFlags, TimeSignature, Transport, WAVETABLE_SIZE};
 
 /// Plugin host.
@@ -75,10 +77,10 @@ pub enum HostMessage<'a> {
     SetEnabled(bool),
     /// The host is playing or stopped.
     ///
-    /// The first value is playing status. The second value is position.
+    /// The value is playing status.
     ///
     /// **Warning: can be called from the mixing thread**
-    SetPlaying(bool, u64),
+    SetPlaying(bool),
     /// The song position has jumped from one position to another non-consecutive position
     ///
     /// **Warning: can be called from the mixing thread**
@@ -88,7 +90,7 @@ pub enum HostMessage<'a> {
     /// The value is [`TimeSignature`](struct.TimeSignature.html).
     SetTimeSig(TimeSignature),
     /// This is called to let the plugin tell the host which files need to be collected or put in
-    /// zip files. 
+    /// zip files.
     ///
     /// The value holds the file #, which starts at 0
     ///
@@ -110,12 +112,12 @@ pub enum HostMessage<'a> {
     /// Set fit to time in beats
     ///
     /// The value holds the time.
-    SetFitTime(f64),
+    SetFitTime(f32),
     /// Sets the number of samples in each tick. This value changes when the tempo, ppq or sample
     /// rate have changed.
     ///
     /// **Warning: can be called from the mixing thread**
-    SetSamplesPerTick(f64),
+    SetSamplesPerTick(f32),
     /// Sets the frequency at which Idle is called.
     ///
     /// The value holds the new time (milliseconds)
@@ -172,7 +174,7 @@ pub enum HostMessage<'a> {
 
 impl From<ffi::Message> for HostMessage<'_> {
     fn from(message: ffi::Message) -> Self {
-        match message.id {
+        let result = match message.id {
             0 => HostMessage::from_show_editor(message),
             1 => HostMessage::from_process_mode(message),
             2 => HostMessage::Flush,
@@ -187,15 +189,15 @@ impl From<ffi::Message> for HostMessage<'_> {
             9 => HostMessage::SetPreset(message.index as u64),
             10 => HostMessage::from_chan_sample_changed(message),
             11 => HostMessage::SetEnabled(message.value != 0),
-            12 => HostMessage::SetPlaying(message.value != 0, message.value as u64),
+            12 => HostMessage::SetPlaying(message.value != 0),
             13 => HostMessage::SongPosChanged,
             14 => HostMessage::SetTimeSig(ffi::time_sig_from_raw(message.value)),
             15 => HostMessage::CollectFile(message.index as usize),
             16 => HostMessage::SetInternalParam,
             17 => HostMessage::SetNumSends(message.value as u64),
             18 => HostMessage::from_load_file(message),
-            19 => HostMessage::SetFitTime(unsafe { *(message.value as *mut f64) }),
-            20 => HostMessage::SetSamplesPerTick(unsafe { *(message.value as *mut f64) }),
+            19 => HostMessage::SetFitTime(f32::from_bits(message.value as i32 as u32)),
+            20 => HostMessage::SetSamplesPerTick(f32::from_bits(message.value as i32 as u32)),
             21 => HostMessage::SetIdleTime(message.value as u64),
             22 => HostMessage::SetFocus(message.value != 0),
             23 => HostMessage::Transport(message.into()),
@@ -208,7 +210,11 @@ impl From<ffi::Message> for HostMessage<'_> {
             30 => HostMessage::SetIoLatency(message.index as u32, message.value as u32),
             32 => HostMessage::PreferredNumIo(message.index as u8),
             _ => HostMessage::Unknown,
-        }
+        };
+
+        debug!("Init HostMessage {:?} from Message", result);
+
+        result
     }
 }
 

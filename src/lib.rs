@@ -105,6 +105,7 @@ pub mod ffi {
         type PluginAdapter;
 
         fn plugin_info(adapter: &PluginAdapter) -> Info;
+        fn print_adapter(adapter: &PluginAdapter);
     }
 }
 
@@ -115,6 +116,7 @@ use std::ffi::CString;
 use std::fmt;
 
 use bitflags::bitflags;
+use log::debug;
 
 pub use ffi::{Info, MidiMessage, TimeSignature};
 pub use host::*;
@@ -135,10 +137,15 @@ pub type intptr_t = isize;
 ///
 /// This is for internal usage only and shouldn't be used directly.
 #[doc(hidden)]
+#[derive(Debug)]
 pub struct PluginAdapter(pub Box<dyn Plugin>);
 
 fn plugin_info(adapter: &PluginAdapter) -> Info {
     adapter.0.info()
+}
+
+fn print_adapter(adapter: &PluginAdapter) {
+    debug!("{:?}", adapter);
 }
 
 /// Interface with C++, which suppose to be used internally. Don't use it directly.
@@ -152,11 +159,106 @@ pub unsafe extern "C" fn plugin_dispatcher(
     adapter: *mut PluginAdapter,
     message: ffi::Message,
 ) -> intptr_t {
-    // (*adapter)
-        // .0
-        // .on_message(HostMessage::from(message))
-        // .as_intptr()
-        0
+    debug!("Receive Message from host: {:?}", message);
+    (*adapter)
+        .0
+        .on_message(HostMessage::from(message))
+        .as_intptr()
+}
+
+/// The result returned from dispatcher function.
+pub trait DispatcherResult {
+    /// Dispatcher result type should implement this method for interoperability with FL API.
+    fn as_intptr(&self) -> intptr_t;
+}
+
+impl DispatcherResult for String {
+    fn as_intptr(&self) -> intptr_t {
+        let value = CString::new(self.as_str()).expect("Unexpected CString::new failure");
+        // will the value still live when we return the pointer?
+        value.as_ptr().to_owned() as intptr_t
+    }
+}
+
+impl DispatcherResult for bool {
+    fn as_intptr(&self) -> intptr_t {
+        (self.to_owned() as u8).into()
+    }
+}
+
+impl DispatcherResult for i32 {
+    fn as_intptr(&self) -> intptr_t {
+        (*self) as intptr_t
+    }
+}
+
+impl DispatcherResult for u8 {
+    fn as_intptr(&self) -> intptr_t {
+        self.to_owned().into()
+    }
+}
+
+impl DispatcherResult for ParameterFlags {
+    fn as_intptr(&self) -> intptr_t {
+        self.bits()
+    }
+}
+
+impl From<u64> for MidiMessage {
+    fn from(value: u64) -> Self {
+        MidiMessage {
+            status: (value & 0xff) as u8,
+            data1: ((value >> 8) & 0xff) as u8,
+            data2: ((value >> 16) & 0xff) as u8,
+            port: -1,
+        }
+    }
+}
+
+impl fmt::Debug for MidiMessage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MidiMessage")
+            .field("status", &self.status)
+            .field("data1", &self.data1)
+            .field("data2", &self.data2)
+            .field("port", &self.port)
+            .finish()
+    }
+}
+
+impl fmt::Debug for Info {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Info")
+            .field("sdk_version", &self.sdk_version)
+            .field("long_name", &self.long_name)
+            .field("short_name", &self.short_name)
+            .field("flags", &self.flags)
+            .field("num_params", &self.num_params)
+            .field("def_poly", &self.def_poly)
+            .field("num_out_ctrls", &self.num_out_ctrls)
+            .field("num_out_voices", &self.num_out_voices)
+            .finish()
+    }
+}
+
+impl fmt::Debug for TimeSignature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TimeSignature")
+            .field("steps_per_bar", &self.steps_per_bar)
+            .field("steps_per_beat", &self.steps_per_beat)
+            .field("ppq", &self.ppq)
+            .finish()
+    }
+}
+
+impl fmt::Debug for ffi::Message {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Message")
+            .field("id", &self.id)
+            .field("index", &self.index)
+            .field("value", &self.value)
+            .finish()
+    }
 }
 
 bitflags! {
@@ -193,44 +295,6 @@ bitflags! {
         /// - 5=128 points sinc
         /// - 6=256 points sinc
         const IP_MASK = 0xFFFF << 8;
-    }
-}
-
-/// The result returned from dispatcher function.
-pub trait DispatcherResult {
-    /// Dispatcher result type should implement this method for interoperability with FL API.
-    fn as_intptr(&self) -> intptr_t;
-}
-
-impl DispatcherResult for String {
-    fn as_intptr(&self) -> intptr_t {
-        let value = CString::new(self.as_str()).expect("Unexpected CString::new failure");
-        // will the value still live when we return the pointer?
-        value.as_ptr().to_owned() as intptr_t
-    }
-}
-
-impl DispatcherResult for bool {
-    fn as_intptr(&self) -> intptr_t {
-        (self.to_owned() as u8).into()
-    }
-}
-
-impl DispatcherResult for i32 {
-    fn as_intptr(&self) -> intptr_t {
-        todo!()
-    }
-}
-
-impl DispatcherResult for u8 {
-    fn as_intptr(&self) -> intptr_t {
-        self.to_owned().into()
-    }
-}
-
-impl DispatcherResult for ParameterFlags {
-    fn as_intptr(&self) -> intptr_t {
-        self.bits()
     }
 }
 
@@ -617,38 +681,6 @@ impl InfoBuilder {
             num_out_ctrls: self.num_out_ctrls,
             num_out_voices: self.num_out_voices,
         }
-    }
-}
-
-impl From<u64> for MidiMessage {
-    fn from(value: u64) -> Self {
-        MidiMessage {
-            status: (value & 0xff) as u8,
-            data1: ((value >> 8) & 0xff) as u8,
-            data2: ((value >> 16) & 0xff) as u8,
-            port: -1,
-        }
-    }
-}
-
-impl fmt::Debug for MidiMessage {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("MidiMessage")
-         .field("status", &self.status)
-         .field("data1", &self.data1)
-         .field("data2", &self.data2)
-         .field("port", &self.port)
-         .finish()
-    }
-}
-
-impl fmt::Debug for TimeSignature {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TimeSignature")
-         .field("steps_per_bar", &self.steps_per_bar)
-         .field("steps_per_beat", &self.steps_per_beat)
-         .field("ppq", &self.ppq)
-         .finish()
     }
 }
 

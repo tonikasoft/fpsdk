@@ -4,7 +4,7 @@ use crate::host::{Host, HostMessage};
 use crate::{DispatcherResult, Info};
 
 /// This trait must be implemented for your plugin.
-pub trait Plugin: RefUnwindSafe {
+pub trait Plugin: std::fmt::Debug + RefUnwindSafe {
     /// Initializer
     fn new(host: Host, tag: i32) -> Self
     where

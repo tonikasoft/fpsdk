@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 bitflags = "1.2"
 cxx = "0.2"
+log = "0.4"
 
 [build-dependencies]
 cxx = "0.2"
