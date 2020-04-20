@@ -2,14 +2,20 @@
 #include "src/lib.rs.h"
 #include <cstring>
 
+char* init_str_from_rust(rust::String &value) {
+  char *res = new char[value.size()];
+  strcpy(res, value.data());
+  res[value.size()] = 0x0000;
+  
+  return res;
+}
+
 TFruityPlug &create_plug_instance_c(TFruityPlugHost &Host, int Tag,
                                     rust::Box<PluginAdapter> adapter) {
   Info info = plugin_info(*adapter);
 
-  char *lname = new char[info.long_name.size() + 1];
-  strcpy(lname, info.long_name.data());
-  char *sname = new char[info.short_name.size() + 1];
-  strcpy(sname, info.short_name.data());
+  char *lname = init_str_from_rust(info.long_name);
+  char *sname = init_str_from_rust(info.short_name);
 
   PFruityPlugInfo c_info = new TFruityPlugInfo{(int)info.sdk_version,
                                                lname,

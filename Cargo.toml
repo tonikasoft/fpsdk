@@ -17,6 +17,7 @@ cxx = "0.2"
 [dev-dependencies]
 log = "0.4"
 simplelog = "0.7"
+simple-logging = "2.0"
 
 [[example]]
 name = "simple"
