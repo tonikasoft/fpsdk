@@ -128,6 +128,15 @@ pub const CURRENT_SDK_VERSION: u32 = 1;
 /// Size of wavetable used by FL.
 pub const WAVETABLE_SIZE: usize = 16384;
 
+/// GetInBuffer flag, which is added before adding to the buffer
+pub const IO_LOCK: i32 = 0;
+
+/// GetInBuffer flag, which is added after adding to the buffer
+pub const IO_UNLOCK: i32 = 1;
+
+/// GetOutBuffer flag, which tells if the buffer is filled
+pub const IO_FILLED: i32 = 1;
+
 /// intptr_t alias
 #[allow(non_camel_case_types)]
 pub type intptr_t = isize;
@@ -295,6 +304,72 @@ bitflags! {
         /// - 5=128 points sinc
         /// - 6=256 points sinc
         const IP_MASK = 0xFFFF << 8;
+    }
+}
+
+bitflags! {
+    /// Processing parameters flags
+    pub struct ProcessParamFlags: isize {
+        /// Update the value of the parameter
+        const UPDATE_VALUE = 1;
+        /// Return the value of the parameter as the result of the function
+        const GET_VALUE = 2;
+        /// Update the hint if there is one
+        const SHOW_HINT = 4;
+        /// Update the parameter control (wheel, slider, ...)
+        const UPDATE_CONTROL = 16;
+        /// A value between 0 and 65536 has to be translated to the range of the parameter control.
+        /// 
+        /// Note that you should also return the translated value, even if
+        /// [ProcessParamFlags::GET_VALUE](
+        /// struct.ProcessParamFlags.html#associatedconstant.GET_VALUE) isn't included.
+        const FROM_MIDI = 32;
+        /// (internal) Don't check if wheels are linked
+        const NO_LINK = 1024;
+        /// Sent by an internal controller. Internal controllers should pay attention to these,
+        /// to avoid Feedback of controller changes
+        const INTERNAL_CTRL = 2048;
+        /// This flag is free to be used by the plugin as it wishes
+        const PLUG_RESERVED = 4096;
+    }
+}
+
+bitflags! {
+    /// Parameter popup menu item flags
+    pub struct ParamMenuItemFlags: isize {
+        /// The item is disabled
+        const DISABLED = 1;
+        /// The item is checked
+        const CHECKED = 2;
+    }
+}
+
+bitflags! {
+    /// Sample loading flags
+    pub struct SampleLoadFlags: isize {
+        ///This tells the sample loader to show an open box, for the user to select a sample
+        const SHOW_DIALOG = 1;
+        /// Force the sample to be reloaded, even if the filename is the same.
+        /// 
+        /// This is handy in case you modified the sample, for example
+        const FORCE_RELOAD = 2;
+        /// Don't load the sample, instead get its filename & make sure that the format is correct
+        /// 
+        /// (useful after [host::HostMessage::ChanSampleChanged](
+        /// enum.HostMessage.html#variant.ChanSampleChanged))
+        const GET_NAME = 4;
+        /// Don't resample to the host sample rate
+        const NO_RESAMPLING = 5;
+    }
+}
+
+bitflags! {
+    /// Notes parameters flags
+    pub struct NotesParamsFlags: isize {
+        /// Delete everything currently on the piano roll before adding the notes
+        const EMPTY_FIRST = 1;
+        /// Put the new notes in the piano roll selection, if there is one
+        const USE_SELECTION = 2;
     }
 }
 
