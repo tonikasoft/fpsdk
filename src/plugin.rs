@@ -1,7 +1,7 @@
 //! Plugin related stuff.
 use std::panic::RefUnwindSafe;
 
-use crate::host::{Host, HostMessage, GetName};
+use crate::host::{Event, GetName, Host, HostMessage};
 use crate::{DispatcherResult, Info};
 
 /// Plugin indentifier
@@ -22,7 +22,15 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe {
     /// function.
     ///
     /// See [`HostMessage`](../host/enum.HostMessage.html) for possible messages.
+    ///
+    /// Can be called from GUI or mixer threads.
     fn on_message(&mut self, message: HostMessage<'_>) -> Box<dyn DispatcherResult>;
     /// This is called when the host wants to know a text representation of some value.
+    ///
+    /// Can be called from GUI or mixer threads.
     fn name_of(&self, value: GetName) -> String;
+    /// Process an event sent by the host.
+    ///
+    /// Can be called from GUI or mixer threads.
+    fn process_event(&mut self, event: Event);
 }

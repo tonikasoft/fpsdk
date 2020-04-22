@@ -65,3 +65,4 @@ TimeSignature time_sig_from_raw(intptr_t raw_time_sig);
 
 // Unsafe Rust functions
 extern "C" intptr_t plugin_dispatcher(PluginAdapter *adapter, Message message);
+extern "C" intptr_t plugin_process_event(PluginAdapter *adapter, Message event);

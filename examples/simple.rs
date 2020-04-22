@@ -10,7 +10,7 @@ use simple_logging;
 #[cfg(unix)]
 use simplelog::{ConfigBuilder, WriteLogger};
 
-use fpsdk::host::{GetName, Host, HostMessage};
+use fpsdk::host::{Event, GetName, Host, HostMessage};
 use fpsdk::plugin::{Plugin, PluginTag};
 use fpsdk::{create_plugin, DispatcherResult, Info, InfoBuilder};
 
@@ -66,6 +66,10 @@ impl Plugin for Test {
             GetName::Param(index) => self.param_names[index].clone(),
             _ => "What?".into(),
         }
+    }
+
+    fn process_event(&mut self, event: Event) {
+        info!("{} host sends event {:?}", self.tag, event);
     }
 }
 

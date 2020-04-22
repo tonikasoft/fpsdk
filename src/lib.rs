@@ -135,7 +135,6 @@ use bitflags::bitflags;
 use log::debug;
 
 pub use ffi::{Info, MidiMessage, TimeSignature};
-use host::HostMessage;
 use plugin::Plugin;
 
 /// Current FL SDK version.
@@ -175,14 +174,28 @@ pub unsafe extern "C" fn plugin_dispatcher(
     adapter: *mut PluginAdapter,
     message: ffi::Message,
 ) -> intptr_t {
-    (*adapter)
-        .0
-        .on_message(HostMessage::from(message))
-        .as_intptr()
+    (*adapter).0.on_message(message.into()).as_intptr()
 }
 
 fn plugin_name_of(adapter: &PluginAdapter, message: ffi::Message) -> String {
     adapter.0.name_of(message.into())
+}
+
+/// [`Plugin::process_event`](plugin/trait.Plugin.html#tymethod.process_event) FFI.
+///
+/// It supposed to be used internally. Don't use it.
+///
+/// # Safety
+///
+/// Unsafe
+#[doc(hidden)]
+#[no_mangle]
+pub unsafe extern "C" fn plugin_process_event(
+    adapter: *mut PluginAdapter,
+    event: ffi::Message,
+) -> intptr_t {
+    (*adapter).0.process_event(event.into());
+    0
 }
 
 /// The result returned from dispatcher function.

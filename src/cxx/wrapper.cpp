@@ -97,6 +97,14 @@ void _stdcall PluginWrapper::GetName(int Section, int Index, int Value,
 
 int _stdcall PluginWrapper::ProcessEvent(int EventID, int EventValue,
                                          int Flags) {
+  Message message = {
+      (intptr_t)EventID,
+      (intptr_t)EventValue,
+      (intptr_t)Flags,
+  };
+
+  plugin_process_event(adapter, message);
+
   return 0;
 }
 

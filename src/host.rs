@@ -332,16 +332,20 @@ impl From<ffi::Message> for GetName {
 pub enum Event {
     /// The tempo has changed.
     ///
-    /// Value holds the tempo.
-    Tempo(f32),
+    /// First value holds the tempo.
+    ///
+    /// Second value holds the average samples per tick.
+    Tempo(f32, u32),
     /// The maximum polyphony has changed. This is only of intrest to standalone generators.
     ///
     /// Value will hold the new maximum polyphony. A value <= 0 will mean infinite polyphony.
     MaxPoly(i32),
     /// The MIDI channel panning has changed.
     ///
-    /// Value holds the new pan (0..127).
-    MidiPan(u8),
+    /// First value holds the new pan (0..127).
+    ///
+    /// Second value holds pan in -64..64 range.
+    MidiPan(u8, i8),
     /// The MIDI channel volume has changed.
     ///
     /// First value holds the new volume (0..127).
@@ -356,4 +360,29 @@ pub enum Event {
     MidiPitch(i32),
     /// Unknown event.
     Unknown,
+}
+
+impl From<ffi::Message> for Event {
+    fn from(message: ffi::Message) -> Self {
+        debug!("Event::from {:?}", message);
+
+        let result = match message.id {
+            0 => Event::Tempo(
+                f32::from_bits(message.index as i32 as u32),
+                message.value as u32,
+            ),
+            1 => Event::MaxPoly(message.index as i32),
+            2 => Event::MidiPan(message.index as u8, message.value as i8),
+            3 => Event::MidiVol(
+                message.index as u8,
+                f32::from_bits(message.value as i32 as u32),
+            ),
+            4 => Event::MidiPitch(message.index as i32),
+            _ => Event::Unknown,
+        };
+
+        debug!("Event::{:?}", result);
+
+        result
+    }
 }
