@@ -1,9 +1,21 @@
+//! Plugin's host (FL Studio).
 use std::ffi::{c_void, CStr};
 use std::os::raw::c_char;
 
 use log::debug;
 
 use crate::{ffi, MidiMessage, ProcessModeFlags, TimeSignature, Transport, WAVETABLE_SIZE};
+
+/// [`Host::in_buf`](struct.Host.html#method.in_buf) flag, which is added before adding to the
+/// buffer.
+pub const IO_LOCK: i32 = 0;
+
+/// [`Host::in_buf`](struct.Host.html#method.in_buf) flag, which is added after adding to the
+/// buffer.
+pub const IO_UNLOCK: i32 = 1;
+
+/// [`Host::out_buf`](struct.Host.html#method.out_buf) flag, which tells if the buffer is filled.
+pub const IO_FILLED: i32 = 1;
 
 /// Plugin host.
 #[derive(Debug)]
@@ -20,7 +32,7 @@ pub enum HostMessage<'a> {
     ShowEditor(Option<*mut c_void>),
     /// Change the processing mode flags. This can be ignored.
     ///
-    /// The value is [ProcessModeFlags](struct.ProcessModeFlags.html).
+    /// The value is [ProcessModeFlags](../struct.ProcessModeFlags.html).
     ProcessMode(ProcessModeFlags),
     /// The continuity of processing is broken. This means that the user has jumped ahead or back
     /// in the playlist, for example. When this happens, the plugin needs to clear all buffers and
@@ -57,7 +69,8 @@ pub enum HostMessage<'a> {
     /// - return `1u8` if the plugin supports the default per-voice level value (filter cutoff (0)
     ///   or filter resonance (1))
     /// - return `2u8` if the plugin supports the per-voice level value, but for another function
-    ///   (then check FPN_VoiceLevel to provide your own names)
+    ///   (then check [`GetName::VoiceLevel`](../host/enum.GetName.html#variant.VoiceLevel) to
+    ///   provide your own names)
     UseVoiceLevels(u8),
     /// Called when the user selects a preset.
     ///
@@ -87,7 +100,7 @@ pub enum HostMessage<'a> {
     SongPosChanged,
     /// The time signature has changed.
     ///
-    /// The value is [`TimeSignature`](struct.TimeSignature.html).
+    /// The value is [`TimeSignature`](../struct.TimeSignature.html).
     SetTimeSig(TimeSignature),
     /// This is called to let the plugin tell the host which files need to be collected or put in
     /// zip files.
@@ -127,7 +140,7 @@ pub enum HostMessage<'a> {
     SetFocus(bool),
     /// (FL 8.0) This is sent by the host for special transport messages, from a controller.
     ///
-    /// The value is the type of message (see [Transport](enum.Transport.html))
+    /// The value is the type of message (see [`Transport`](../enum.Transport.html))
     ///
     /// Result should be `true` if handled, `false` otherwise
     Transport(Transport),
@@ -139,13 +152,14 @@ pub enum HostMessage<'a> {
     /// Result should be `true` if handled, `false` otherwise
     MidiIn(MidiMessage),
     /// Mixer routing changed, must use
-    /// [`PluginMessage::GetInOuts`](enum.PluginMessage.html#variant.GetInOuts) if necessary
+    /// [`PluginMessage::GetInOuts`](../plugin/enum.PluginMessage.html#variant.GetInOuts) if
+    /// necessary
     RoutingChanged,
     /// Retrieves info about a parameter.
     ///
     /// The value is the parameter number.
     ///
-    /// see [ParameterFlags](struct.ParameterFlags.html) for the result
+    /// see [`ParameterFlags`](../struct.ParameterFlags.html) for the result
     GetParamInfo(usize),
     /// Called after a project has been loaded, to leave a chance to kill automation (that could be
     /// loaded after the plugin is created) if necessary.
@@ -174,6 +188,8 @@ pub enum HostMessage<'a> {
 
 impl From<ffi::Message> for HostMessage<'_> {
     fn from(message: ffi::Message) -> Self {
+        debug!("HostMessage::from {:?}", message);
+
         let result = match message.id {
             0 => HostMessage::from_show_editor(message),
             1 => HostMessage::from_process_mode(message),
@@ -212,7 +228,7 @@ impl From<ffi::Message> for HostMessage<'_> {
             _ => HostMessage::Unknown,
         };
 
-        debug!("Init HostMessage {:?} from Message", result);
+        debug!("HostMessage::{:?}", result);
 
         result
     }
@@ -245,33 +261,97 @@ impl HostMessage<'_> {
     }
 }
 
-/// Event IDs
+/// The host sends this message when it wants to know a text representation of some value.
+///
+/// See [`Plugin::name_of`](../plugin/trait.Plugin.html#tymethod.name_of)
+#[derive(Debug)]
+pub enum GetName {
+    /// Retrieve the name of a parameter.
+    ///
+    /// Value specifies parameter index.
+    Param(usize),
+    /// Retrieve the text representation of the value of a parameter for use in the event editor.
+    ///
+    /// Value specifies parameter index.
+    Semitone(usize),
+    /// Retrieve the name of a note in piano roll.
+    ///
+    /// The first value specifies note index.
+    ///
+    /// The second one specifies the color (or MIDI channel).
+    ParamValue(u8, u8),
+    /// (not used yet) Retrieve the name of a patch.
+    ///
+    /// Value specifies patch index.
+    Patch(usize),
+    /// (optional) Retrieve the name of a per-voice parameter, specified by the value.
+    ///
+    /// Default is filter cutoff (value=0) and resonance (value=1).
+    VoiceLevel(usize),
+    /// Longer description for per-voice parameter (works like
+    /// [`VoiceLevel`](enum.GetName.html#variant.VoiceLevel))
+    VoiceLevelHint(usize),
+    /// This is called when the host wants to know the name of a preset, for plugins that support
+    /// presets (see
+    /// [`PluginMessage::SetNumPresets`](../plugin/enum.PluginMessage.html#variant.SetNumPresets)).
+    ///
+    /// Value specifies preset index.
+    Preset(usize),
+    /// For plugins that output controllers, retrieve the name of output controller.
+    ///
+    /// Value specifies controller index.
+    OutCtrl(usize),
+    /// Message ID is unknown
+    Unknown,
+}
+
+impl From<ffi::Message> for GetName {
+    fn from(message: ffi::Message) -> Self {
+        debug!("GetName::from {:?}", message);
+
+        let result = match message.id {
+            0 => GetName::Param(message.index as usize),
+            1 => GetName::Semitone(message.index as usize),
+            2 => GetName::ParamValue(message.index as u8, message.value as u8),
+            3 => GetName::Patch(message.index as usize),
+            4 => GetName::VoiceLevel(message.index as usize),
+            5 => GetName::VoiceLevelHint(message.index as usize),
+            6 => GetName::Preset(message.index as usize),
+            7 => GetName::OutCtrl(message.index as usize),
+            _ => GetName::Unknown,
+        };
+
+        debug!("GetName::{:?}", result);
+
+        result
+    }
+}
+
+/// Event IDs.
 #[derive(Debug)]
 pub enum Event {
-    /// The tempo has changed. 
-    /// 
+    /// The tempo has changed.
+    ///
     /// Value holds the tempo.
     Tempo(f32),
     /// The maximum polyphony has changed. This is only of intrest to standalone generators.
-    /// 
-    /// Value will hold the new maximum polyphony. 
-    /// 
-    /// A value <= 0 will mean infinite polyphony.
+    ///
+    /// Value will hold the new maximum polyphony. A value <= 0 will mean infinite polyphony.
     MaxPoly(i32),
-    /// The MIDI channel panning has changed. 
-    /// 
+    /// The MIDI channel panning has changed.
+    ///
     /// Value holds the new pan (0..127).
     MidiPan(u8),
-    /// The MIDI channel volume has changed. 
-    /// 
-    /// First value holds the new volume (0..127). 
-    /// 
+    /// The MIDI channel volume has changed.
+    ///
+    /// First value holds the new volume (0..127).
+    ///
     /// Second value also holds the new volume. It's in the range 0..1.
     MidiVol(u8, f32),
-    /// The MIDI channel pitch has changed. 
-    /// 
-    /// Value will hold the new value in *cents*. 
-    /// 
+    /// The MIDI channel pitch has changed.
+    ///
+    /// Value will hold the new value in *cents*.
+    ///
     /// This has to be translated according to the current pitch bend range.
     MidiPitch(i32),
     /// Unknown event.

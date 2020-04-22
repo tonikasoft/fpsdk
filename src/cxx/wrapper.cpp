@@ -2,11 +2,11 @@
 #include "src/lib.rs.h"
 #include <cstring>
 
-char* init_str_from_rust(rust::String &value) {
+char *init_str_from_rust(rust::String &value) {
   char *res = new char[value.size()];
   strcpy(res, value.data());
   res[value.size()] = 0x0000;
-  
+
   return res;
 }
 
@@ -54,9 +54,6 @@ PluginWrapper::~PluginWrapper() {
   free(adapter);
 }
 
-//-------------------------
-// save or load parameter
-//-------------------------
 void _stdcall PluginWrapper::SaveRestoreState(IStream *Stream, BOOL Save) {
   if (Save) {
     // save paremeters
@@ -87,14 +84,15 @@ intptr_t _stdcall PluginWrapper::Dispatcher(intptr_t ID, intptr_t Index,
   return plugin_dispatcher(adapter, message);
 }
 
-//----------------
-//
-//----------------
 void _stdcall PluginWrapper::GetName(int Section, int Index, int Value,
                                      char *Name) {
-  if (Section == FPN_Param) {
-    strcpy(Name, "Gain");
-  }
+  Message message = {
+      (intptr_t)Section,
+      (intptr_t)Index,
+      (intptr_t)Value,
+  };
+
+  strcpy(Name, plugin_name_of(*adapter, message).data());
 }
 
 int _stdcall PluginWrapper::ProcessEvent(int EventID, int EventValue,

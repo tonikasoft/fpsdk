@@ -3,6 +3,15 @@
 //!
 //! Note that this SDK is not meant to make hosts for FL plugins.
 //!
+//! ## How to use this library
+//!
+//! You should implement [`Plugin`](plugin/trait.Plugin.html) and export it with
+//! [`create_plugin!`](macro.create_plugin.html).
+//!
+//! To talk to host use [`Host`](host/struct.Host.html).
+//!
+//! `examples/simple.rs` provides you with more details.
+//!
 //! ## Types of plugins
 //!
 //! There are two kinds of Fruity plugins: effects and generators. Effects are plugins that receive
@@ -66,12 +75,17 @@ pub mod ffi {
         pub num_out_voices: u32,
     }
 
+    /// Time signature.
     pub struct TimeSignature {
+        /// Steps per bar.
         pub steps_per_bar: u32,
+        /// Steps per beat.
         pub steps_per_beat: u32,
+        /// Pulses per quarter note.
         pub ppq: u32,
     }
 
+    /// MIDI message.
     pub struct MidiMessage {
         pub status: u8,
         pub data1: u8,
@@ -105,12 +119,14 @@ pub mod ffi {
         type PluginAdapter;
 
         fn plugin_info(adapter: &PluginAdapter) -> Info;
+        // Used for debugging
         fn print_adapter(adapter: &PluginAdapter);
+        fn plugin_name_of(adapter: &PluginAdapter, message: Message) -> String;
     }
 }
 
-mod host;
-mod plugin;
+pub mod host;
+pub mod plugin;
 
 use std::ffi::CString;
 use std::fmt;
@@ -119,23 +135,14 @@ use bitflags::bitflags;
 use log::debug;
 
 pub use ffi::{Info, MidiMessage, TimeSignature};
-pub use host::*;
-pub use plugin::*;
+use host::HostMessage;
+use plugin::Plugin;
 
 /// Current FL SDK version.
 pub const CURRENT_SDK_VERSION: u32 = 1;
 
 /// Size of wavetable used by FL.
 pub const WAVETABLE_SIZE: usize = 16384;
-
-/// GetInBuffer flag, which is added before adding to the buffer
-pub const IO_LOCK: i32 = 0;
-
-/// GetInBuffer flag, which is added after adding to the buffer
-pub const IO_UNLOCK: i32 = 1;
-
-/// GetOutBuffer flag, which tells if the buffer is filled
-pub const IO_FILLED: i32 = 1;
 
 /// intptr_t alias
 #[allow(non_camel_case_types)]
@@ -168,11 +175,14 @@ pub unsafe extern "C" fn plugin_dispatcher(
     adapter: *mut PluginAdapter,
     message: ffi::Message,
 ) -> intptr_t {
-    debug!("Receive Message from host: {:?}", message);
     (*adapter)
         .0
         .on_message(HostMessage::from(message))
         .as_intptr()
+}
+
+fn plugin_name_of(adapter: &PluginAdapter, message: ffi::Message) -> String {
+    adapter.0.name_of(message.into())
 }
 
 /// The result returned from dispatcher function.
@@ -319,7 +329,7 @@ bitflags! {
         /// Update the parameter control (wheel, slider, ...)
         const UPDATE_CONTROL = 16;
         /// A value between 0 and 65536 has to be translated to the range of the parameter control.
-        /// 
+        ///
         /// Note that you should also return the translated value, even if
         /// [ProcessParamFlags::GET_VALUE](
         /// struct.ProcessParamFlags.html#associatedconstant.GET_VALUE) isn't included.
@@ -350,11 +360,11 @@ bitflags! {
         ///This tells the sample loader to show an open box, for the user to select a sample
         const SHOW_DIALOG = 1;
         /// Force the sample to be reloaded, even if the filename is the same.
-        /// 
+        ///
         /// This is handy in case you modified the sample, for example
         const FORCE_RELOAD = 2;
         /// Don't load the sample, instead get its filename & make sure that the format is correct
-        /// 
+        ///
         /// (useful after [host::HostMessage::ChanSampleChanged](
         /// enum.HostMessage.html#variant.ChanSampleChanged))
         const GET_NAME = 4;
@@ -710,7 +720,7 @@ impl InfoBuilder {
 
     /// The plugin will send delayed messages to itself (will require the internal sync clock to be
     /// enabled).
-    pub fn msg_out(mut self) -> Self {
+    pub fn loop_out(mut self) -> Self {
         self.flags |= 1 << 17;
         self
     }
@@ -724,14 +734,15 @@ impl InfoBuilder {
     }
 
     /// This plugin as a generator will use the sample loaded in its parent channel (see
-    /// [`PluginDispatcherId::ChanSampleChanged`](enum.PluginDispatcherId.html)).
+    /// [`HostMessage::ChanSampleChanged`](
+    /// ../host/enum.HostMessage.html#variant.ChanSampleChanged)).
     pub fn get_chan_sample(mut self) -> Self {
         self.flags |= 1 << 19;
         self
     }
 
     /// Fit to time selector will appear in channel settings window (see
-    /// [`PluginDispatcherId::SetFitTime`](enum.PluginDispatcherId.html)).
+    /// [`HostMessage::SetFitTime`](../host/enum.HostMessage.html#variant.SetFitTime)).
     pub fn want_fit_time(mut self) -> Self {
         self.flags |= 1 << 20;
         self
@@ -760,7 +771,7 @@ impl InfoBuilder {
 }
 
 /// Exposes your plugin from DLL. Accepts type name as input. The type should implement
-/// [`Plugin`](trait.Plugin.html) trait.
+/// [`Plugin`](plugin/trait.Plugin.html) trait.
 #[macro_export]
 macro_rules! create_plugin {
     ($pl:ty) => {
@@ -770,8 +781,8 @@ macro_rules! create_plugin {
             host: *mut $crate::ffi::TFruityPlugHost,
             tag: i32,
         ) -> *mut $crate::ffi::TFruityPlug {
-            let ho = $crate::Host { version: 0 };
-            let plugin = <$pl as $crate::Plugin>::new(ho, tag);
+            let ho = $crate::host::Host { version: 0 };
+            let plugin = <$pl as $crate::plugin::Plugin>::new(ho, tag);
             let adapter = $crate::PluginAdapter(Box::new(plugin));
             $crate::ffi::create_plug_instance_c(&mut *host, tag, Box::new(adapter))
         }

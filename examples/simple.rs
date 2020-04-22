@@ -5,11 +5,14 @@ use std::panic::AssertUnwindSafe;
 use std::sync::Once;
 
 use log::{info, LevelFilter};
+#[cfg(windows)]
 use simple_logging;
 #[cfg(unix)]
 use simplelog::{ConfigBuilder, WriteLogger};
 
-use fpsdk::{create_plugin, DispatcherResult, Host, HostMessage, Info, InfoBuilder, Plugin};
+use fpsdk::host::{GetName, Host, HostMessage};
+use fpsdk::plugin::{Plugin, PluginTag};
+use fpsdk::{create_plugin, DispatcherResult, Info, InfoBuilder};
 
 static ONCE: Once = Once::new();
 const LOG_PATH: &str = "simple.log";
@@ -17,8 +20,9 @@ const LOG_PATH: &str = "simple.log";
 #[derive(Debug)]
 struct Test {
     host: Host,
-    tag: i32,
+    tag: PluginTag,
     data: AssertUnwindSafe<RefCell<i32>>,
+    param_names: Vec<String>,
 }
 
 impl Plugin for Test {
@@ -31,19 +35,37 @@ impl Plugin for Test {
             host,
             tag,
             data: AssertUnwindSafe(RefCell::new(10)),
+            param_names: vec![
+                "Parameter 1".into(),
+                "Parameter 2".into(),
+                "Parameter 3".into(),
+            ],
         }
     }
 
     fn info(&self) -> Info {
         info!("plugin {} will return info", self.tag);
 
-        InfoBuilder::new_effect("Simple", "Simple", 1).build()
+        InfoBuilder::new_effect("Simple", "Simple", self.param_names.len() as u32).build()
+    }
+
+    fn tag(&self) -> PluginTag {
+        self.tag
     }
 
     fn on_message(&mut self, message: HostMessage) -> Box<dyn DispatcherResult> {
         info!("{} get message from host: {:?}", self.tag, message);
 
         Box::new(0)
+    }
+
+    fn name_of(&self, message: GetName) -> String {
+        info!("{} host asks name of {:?}", self.tag, message);
+
+        match message {
+            GetName::Param(index) => self.param_names[index].clone(),
+            _ => "What?".into(),
+        }
     }
 }
 
@@ -65,7 +87,7 @@ fn _init_log() {
     // for macOS it's /Applications/FL Studio 20.app/Contents/Resources/FL
     // for Windows it's <Drive>:\Program Files\Image-Line\FL Studio 20
     let file = OpenOptions::new()
-        .write(true)
+        .append(true)
         .create(true)
         .open(LOG_PATH)
         .unwrap();
