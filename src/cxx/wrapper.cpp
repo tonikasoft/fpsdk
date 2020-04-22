@@ -108,9 +108,6 @@ int _stdcall PluginWrapper::ProcessEvent(int EventID, int EventValue,
   return 0;
 }
 
-//----------------
-//
-//----------------
 int _stdcall PluginWrapper::ProcessParam(int Index, int Value, int RECFlags) {
   int ret = 0;
   if (Index < Info->NumParams) {
@@ -189,7 +186,7 @@ int _stdcall PluginWrapper::Voice_Render(TVoiceHandle Handle,
 
 void _stdcall PluginWrapper::NewTick() { plugin_tick(adapter); }
 
-void _stdcall PluginWrapper::MIDITick() {}
+void _stdcall PluginWrapper::MIDITick() { plugin_midi_tick(adapter); }
 
 void _stdcall PluginWrapper::MIDIIn(int &Msg) {}
 

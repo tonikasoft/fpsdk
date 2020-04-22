@@ -1,6 +1,8 @@
 //! Plugin related stuff.
 use std::panic::RefUnwindSafe;
 
+use log::warn;
+
 use crate::host::{Event, GetName, Host, HostMessage};
 use crate::{DispatcherResult, Info};
 
@@ -32,7 +34,7 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe {
     /// Process an event sent by the host.
     ///
     /// Can be called from GUI or mixer threads.
-    fn process_event(&mut self, event: Event);
+    fn process_event(&mut self, _event: Event) {}
     /// Gets called before a new tick is mixed (not played), if the plugin added
     /// [`PluginBuilder::want_new_tick`](../struct.InfoBuilder.html#method.want_new_tick) into
     /// [`Info`](../struct.Info.html).
@@ -42,5 +44,13 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe {
     /// here.
     ///
     /// Called from mixer thread.
-    fn tick(&mut self);
+    fn tick(&mut self) {}
+    /// **NOT USED YET, OMIT THIS METHOD**
+    ///
+    /// This is called before a new midi tick is played (not mixed).
+    ///
+    /// Can be called from GUI or mixer threads.
+    fn midi_tick(&mut self) {
+        warn!("Host doesn't use this method.");
+    }
 }

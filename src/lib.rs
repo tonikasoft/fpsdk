@@ -213,6 +213,19 @@ pub unsafe extern "C" fn plugin_tick(adapter: *mut PluginAdapter) {
     (*adapter).0.tick();
 }
 
+/// [`Plugin::midi_tick`](plugin/trait.Plugin.html#tymethod.midi_tick) FFI.
+///
+/// It supposed to be used internally. Don't use it.
+///
+/// # Safety
+///
+/// Unsafe
+#[doc(hidden)]
+#[no_mangle]
+pub unsafe extern "C" fn plugin_midi_tick(adapter: *mut PluginAdapter) {
+    (*adapter).0.midi_tick();
+}
+
 /// The result returned from dispatcher function.
 pub trait DispatcherResult {
     /// Dispatcher result type should implement this method for interoperability with FL API.
