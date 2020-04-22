@@ -54,8 +54,8 @@ pub enum HostMessage<'a> {
     /// them as cutoff and resonance.
     ///
     /// - return `0u8` if the plugin doesn't support the default per-voice level value
-    /// - return `1u8` if the plugin supports the default per-voice level value (filter cutoff (0) or
-    ///   filter resonance (1))
+    /// - return `1u8` if the plugin supports the default per-voice level value (filter cutoff (0)
+    ///   or filter resonance (1))
     /// - return `2u8` if the plugin supports the per-voice level value, but for another function
     ///   (then check FPN_VoiceLevel to provide your own names)
     UseVoiceLevels(u8),
@@ -243,4 +243,37 @@ impl HostMessage<'_> {
         let value = cstr.to_string_lossy().to_string();
         HostMessage::LoadFile(value)
     }
+}
+
+/// Event IDs
+#[derive(Debug)]
+pub enum Event {
+    /// The tempo has changed. 
+    /// 
+    /// Value holds the tempo.
+    Tempo(f32),
+    /// The maximum polyphony has changed. This is only of intrest to standalone generators.
+    /// 
+    /// Value will hold the new maximum polyphony. 
+    /// 
+    /// A value <= 0 will mean infinite polyphony.
+    MaxPoly(i32),
+    /// The MIDI channel panning has changed. 
+    /// 
+    /// Value holds the new pan (0..127).
+    MidiPan(u8),
+    /// The MIDI channel volume has changed. 
+    /// 
+    /// First value holds the new volume (0..127). 
+    /// 
+    /// Second value also holds the new volume. It's in the range 0..1.
+    MidiVol(u8, f32),
+    /// The MIDI channel pitch has changed. 
+    /// 
+    /// Value will hold the new value in *cents*. 
+    /// 
+    /// This has to be translated according to the current pitch bend range.
+    MidiPitch(i32),
+    /// Unknown event.
+    Unknown,
 }
