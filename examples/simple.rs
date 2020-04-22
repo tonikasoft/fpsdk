@@ -4,7 +4,7 @@ use std::fs::OpenOptions;
 use std::panic::AssertUnwindSafe;
 use std::sync::Once;
 
-use log::{info, LevelFilter};
+use log::{info, trace, LevelFilter};
 #[cfg(windows)]
 use simple_logging;
 #[cfg(unix)]
@@ -46,7 +46,9 @@ impl Plugin for Test {
     fn info(&self) -> Info {
         info!("plugin {} will return info", self.tag);
 
-        InfoBuilder::new_effect("Simple", "Simple", self.param_names.len() as u32).build()
+        InfoBuilder::new_effect("Simple", "Simple", self.param_names.len() as u32)
+            .want_new_tick()
+            .build()
     }
 
     fn tag(&self) -> PluginTag {
@@ -70,6 +72,10 @@ impl Plugin for Test {
 
     fn process_event(&mut self, event: Event) {
         info!("{} host sends event {:?}", self.tag, event);
+    }
+
+    fn tick(&mut self) {
+        trace!("{} receive new tick", self.tag);
     }
 }
 

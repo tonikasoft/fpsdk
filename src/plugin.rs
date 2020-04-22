@@ -13,7 +13,7 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe {
     fn new(host: Host, tag: PluginTag) -> Self
     where
         Self: Sized;
-    /// Get plugin [`Info`](../struct.Info.html)
+    /// Get plugin [`Info`](../struct.Info.html).
     fn info(&self) -> Info;
     /// Get plugin tag. You should store it when [`Plugin::new`](trait.Plugin.html#tymethod.new) is
     /// called.
@@ -33,4 +33,14 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe {
     ///
     /// Can be called from GUI or mixer threads.
     fn process_event(&mut self, event: Event);
+    /// Gets called before a new tick is mixed (not played), if the plugin added
+    /// [`PluginBuilder::want_new_tick`](../struct.InfoBuilder.html#method.want_new_tick) into
+    /// [`Info`](../struct.Info.html).
+    ///
+    /// Internal controller plugins should call
+    /// [`host::Host::on_control_change`](../host/struct.Host.html#method.on_control_change) from
+    /// here.
+    ///
+    /// Called from mixer thread.
+    fn tick(&mut self);
 }

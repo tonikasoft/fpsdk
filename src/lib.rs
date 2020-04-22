@@ -163,7 +163,9 @@ fn print_adapter(adapter: &PluginAdapter) {
     debug!("{:?}", adapter);
 }
 
-/// Interface with C++, which suppose to be used internally. Don't use it directly.
+/// [`Plugin::on_message`](plugin/trait.Plugin.html#tymethod.on_message) FFI.
+///
+/// It supposed to be used internally. Don't use it.
 ///
 /// # Safety
 ///
@@ -196,6 +198,19 @@ pub unsafe extern "C" fn plugin_process_event(
 ) -> intptr_t {
     (*adapter).0.process_event(event.into());
     0
+}
+
+/// [`Plugin::tick`](plugin/trait.Plugin.html#tymethod.tick) FFI.
+///
+/// It supposed to be used internally. Don't use it.
+///
+/// # Safety
+///
+/// Unsafe
+#[doc(hidden)]
+#[no_mangle]
+pub unsafe extern "C" fn plugin_tick(adapter: *mut PluginAdapter) {
+    (*adapter).0.tick();
 }
 
 /// The result returned from dispatcher function.

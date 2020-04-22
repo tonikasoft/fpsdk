@@ -187,7 +187,7 @@ int _stdcall PluginWrapper::Voice_Render(TVoiceHandle Handle,
   return 0;
 }
 
-void _stdcall PluginWrapper::NewTick() {}
+void _stdcall PluginWrapper::NewTick() { plugin_tick(adapter); }
 
 void _stdcall PluginWrapper::MIDITick() {}
 
