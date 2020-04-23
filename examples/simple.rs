@@ -12,7 +12,9 @@ use simplelog::{ConfigBuilder, WriteLogger};
 
 use fpsdk::host::{Event, GetName, Host, HostMessage};
 use fpsdk::plugin::{Plugin, PluginTag};
-use fpsdk::{create_plugin, DispatcherResult, Info, InfoBuilder};
+use fpsdk::{
+    create_plugin, AsRawPtr, Info, InfoBuilder, ProcessParamFlags, ValuePtr,
+};
 
 static ONCE: Once = Once::new();
 const LOG_PATH: &str = "simple.log";
@@ -55,7 +57,7 @@ impl Plugin for Test {
         self.tag
     }
 
-    fn on_message(&mut self, message: HostMessage) -> Box<dyn DispatcherResult> {
+    fn on_message(&mut self, message: HostMessage) -> Box<dyn AsRawPtr> {
         info!("{} get message from host: {:?}", self.tag, message);
 
         Box::new(0)
@@ -76,6 +78,19 @@ impl Plugin for Test {
 
     fn tick(&mut self) {
         trace!("{} receive new tick", self.tag);
+    }
+
+    fn process_param(
+        &mut self,
+        index: usize,
+        value: ValuePtr,
+        flags: ProcessParamFlags,
+    ) -> Box<dyn AsRawPtr> {
+        info!(
+            "{} process param: index {}, value {}, flags {:?}",
+            self.tag, index, value.get::<i32>(), flags
+        );
+        Box::new(0)
     }
 }
 

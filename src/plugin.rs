@@ -1,10 +1,8 @@
 //! Plugin related stuff.
 use std::panic::RefUnwindSafe;
 
-use log::warn;
-
 use crate::host::{Event, GetName, Host, HostMessage};
-use crate::{DispatcherResult, Info};
+use crate::{AsRawPtr, Info, ProcessParamFlags, ValuePtr};
 
 /// Plugin indentifier
 pub type PluginTag = i32;
@@ -26,7 +24,7 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe {
     /// See [`HostMessage`](../host/enum.HostMessage.html) for possible messages.
     ///
     /// Can be called from GUI or mixer threads.
-    fn on_message(&mut self, message: HostMessage<'_>) -> Box<dyn DispatcherResult>;
+    fn on_message(&mut self, message: HostMessage<'_>) -> Box<dyn AsRawPtr>;
     /// This is called when the host wants to know a text representation of some value.
     ///
     /// Can be called from GUI or mixer threads.
@@ -50,7 +48,25 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe {
     /// This is called before a new midi tick is played (not mixed).
     ///
     /// Can be called from GUI or mixer threads.
-    fn midi_tick(&mut self) {
-        warn!("Host doesn't use this method.");
+    fn midi_tick(&mut self) {}
+    /// Something has to be done concerning a parameter. What exactly has to be done is explained
+    /// by the `flags` parameter (see [`ProcessParamFlags`](../struct.ProcessParamFlags.html)).
+    ///
+    /// - `index` - the index of the parameter.
+    /// - `value` - the (new) value of the parameter.
+    /// - `flags` - describes what needs to be done to the parameter. It can be a combination of
+    ///   several flags.
+    ///
+    /// If
+    /// [`ProcessParamFlags::GET_VALUE`](
+    /// ../struct.ProcessParamFlags.html#associatedconstant.GET_VALUE) is specified in `flags`, the
+    /// result has to be the value of the parameter.
+    fn process_param(
+        &mut self,
+        _index: usize,
+        _value: ValuePtr,
+        _flags: ProcessParamFlags,
+    ) -> Box<dyn AsRawPtr> {
+        Box::new(0)
     }
 }

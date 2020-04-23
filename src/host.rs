@@ -1,10 +1,11 @@
 //! Plugin's host (FL Studio).
-use std::ffi::{c_void, CStr};
-use std::os::raw::c_char;
+use std::ffi::c_void;
 
 use log::debug;
 
-use crate::{ffi, MidiMessage, ProcessModeFlags, TimeSignature, Transport, WAVETABLE_SIZE};
+use crate::{
+    ffi, FromRawPtr, MidiMessage, ProcessModeFlags, TimeSignature, Transport, WAVETABLE_SIZE,
+};
 
 /// [`Host::in_buf`](struct.Host.html#method.in_buf) flag, which is added before adding to the
 /// buffer.
@@ -211,7 +212,7 @@ impl From<ffi::Message> for HostMessage<'_> {
             15 => HostMessage::CollectFile(message.index as usize),
             16 => HostMessage::SetInternalParam,
             17 => HostMessage::SetNumSends(message.value as u64),
-            18 => HostMessage::from_load_file(message),
+            18 => HostMessage::LoadFile(String::from_raw_ptr(message.value)),
             19 => HostMessage::SetFitTime(f32::from_bits(message.value as i32 as u32)),
             20 => HostMessage::SetSamplesPerTick(f32::from_bits(message.value as i32 as u32)),
             21 => HostMessage::SetIdleTime(message.value as u64),
@@ -252,12 +253,6 @@ impl HostMessage<'_> {
         let slice =
             unsafe { std::slice::from_raw_parts_mut(message.value as *mut f32, WAVETABLE_SIZE) };
         HostMessage::ChanSampleChanged(slice)
-    }
-
-    fn from_load_file(message: ffi::Message) -> Self {
-        let cstr = unsafe { CStr::from_ptr(message.value as *const c_char) };
-        let value = cstr.to_string_lossy().to_string();
-        HostMessage::LoadFile(value)
     }
 }
 
@@ -368,14 +363,14 @@ impl From<ffi::Message> for Event {
 
         let result = match message.id {
             0 => Event::Tempo(
-                f32::from_bits(message.index as i32 as u32),
+                f32::from_raw_ptr(message.index),
                 message.value as u32,
             ),
             1 => Event::MaxPoly(message.index as i32),
             2 => Event::MidiPan(message.index as u8, message.value as i8),
             3 => Event::MidiVol(
                 message.index as u8,
-                f32::from_bits(message.value as i32 as u32),
+                f32::from_raw_ptr(message.value),
             ),
             4 => Event::MidiPitch(message.index as i32),
             _ => Event::Unknown,

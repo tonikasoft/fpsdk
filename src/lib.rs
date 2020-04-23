@@ -128,8 +128,9 @@ pub mod ffi {
 pub mod host;
 pub mod plugin;
 
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::fmt;
+use std::os::raw::{c_char, c_void};
 
 use bitflags::bitflags;
 use log::debug;
@@ -145,7 +146,117 @@ pub const WAVETABLE_SIZE: usize = 16384;
 
 /// intptr_t alias
 #[allow(non_camel_case_types)]
-pub type intptr_t = isize;
+type intptr_t = isize;
+
+/// Raw pointer to value.
+#[derive(Debug)]
+pub struct ValuePtr(intptr_t);
+
+impl ValuePtr {
+    /// Get value.
+    ///
+    /// See [`FromRawPtr`](trait.FromRawPtr.html) for implemented types.
+    pub fn get<T: FromRawPtr>(&self) -> T {
+        T::from_raw_ptr(self.0)
+    }
+}
+
+/// For types, which can be represented as `intptr_t`.
+pub trait AsRawPtr {
+    /// Conversion method.
+    fn as_raw_ptr(&self) -> intptr_t;
+}
+
+macro_rules! primitive_as_raw_ptr {
+    ($type:ty) => {
+        impl AsRawPtr for $type {
+            fn as_raw_ptr(&self) -> intptr_t {
+                (*self) as intptr_t
+            }
+        }
+    };
+}
+
+primitive_as_raw_ptr!(i8);
+primitive_as_raw_ptr!(u8);
+primitive_as_raw_ptr!(i16);
+primitive_as_raw_ptr!(u16);
+primitive_as_raw_ptr!(i32);
+primitive_as_raw_ptr!(u32);
+primitive_as_raw_ptr!(i64);
+primitive_as_raw_ptr!(u64);
+primitive_as_raw_ptr!(usize);
+primitive_as_raw_ptr!(*mut c_void);
+primitive_as_raw_ptr!(*const c_void);
+
+impl AsRawPtr for bool {
+    fn as_raw_ptr(&self) -> intptr_t {
+        (self.to_owned() as u8).into()
+    }
+}
+
+impl AsRawPtr for String {
+    fn as_raw_ptr(&self) -> intptr_t {
+        let value = CString::new(self.as_str()).expect("Unexpected CString::new failure");
+        // will the value still live when we return the pointer?
+        value.as_ptr().to_owned() as intptr_t
+    }
+}
+
+/// For conversion from `intptr_t`.
+pub trait FromRawPtr {
+    /// Conversion method.
+    fn from_raw_ptr(value: intptr_t) -> Self
+    where
+        Self: Sized;
+}
+
+macro_rules! primitive_from_raw_ptr {
+    ($type:ty) => {
+        impl FromRawPtr for $type {
+            fn from_raw_ptr(value: intptr_t) -> Self {
+                value as Self
+            }
+        }
+    };
+}
+
+primitive_from_raw_ptr!(i8);
+primitive_from_raw_ptr!(u8);
+primitive_from_raw_ptr!(i16);
+primitive_from_raw_ptr!(u16);
+primitive_from_raw_ptr!(i32);
+primitive_from_raw_ptr!(u32);
+primitive_from_raw_ptr!(i64);
+primitive_from_raw_ptr!(u64);
+primitive_from_raw_ptr!(usize);
+primitive_from_raw_ptr!(*mut c_void);
+primitive_from_raw_ptr!(*const c_void);
+
+impl FromRawPtr for f32 {
+    fn from_raw_ptr(value: intptr_t) -> Self {
+        f32::from_bits(value as i32 as u32)
+    }
+}
+
+impl FromRawPtr for f64 {
+    fn from_raw_ptr(value: intptr_t) -> Self {
+        f64::from_bits(value as i64 as u64)
+    }
+}
+
+impl FromRawPtr for String {
+    fn from_raw_ptr(value: intptr_t) -> Self {
+        let cstr = unsafe { CStr::from_ptr(value as *const c_char) };
+        cstr.to_string_lossy().to_string()
+    }
+}
+
+impl FromRawPtr for bool {
+    fn from_raw_ptr(value: intptr_t) -> Self {
+        value != 0
+    }
+}
 
 /// As far as we can't use trait objects to share them with C++, we need a concrete type. This type
 /// wraps user's plugin as a delegate and calls its methods.
@@ -176,7 +287,7 @@ pub unsafe extern "C" fn plugin_dispatcher(
     adapter: *mut PluginAdapter,
     message: ffi::Message,
 ) -> intptr_t {
-    (*adapter).0.on_message(message.into()).as_intptr()
+    (*adapter).0.on_message(message.into()).as_raw_ptr()
 }
 
 fn plugin_name_of(adapter: &PluginAdapter, message: ffi::Message) -> String {
@@ -198,6 +309,29 @@ pub unsafe extern "C" fn plugin_process_event(
 ) -> intptr_t {
     (*adapter).0.process_event(event.into());
     0
+}
+
+/// [`Plugin::process_param`](plugin/trait.Plugin.html#tymethod.process_param) FFI.
+///
+/// It supposed to be used internally. Don't use it.
+///
+/// # Safety
+///
+/// Unsafe
+#[doc(hidden)]
+#[no_mangle]
+pub unsafe extern "C" fn plugin_process_param(
+    adapter: *mut PluginAdapter,
+    message: ffi::Message,
+) -> intptr_t {
+    (*adapter)
+        .0
+        .process_param(
+            message.id as usize,
+            ValuePtr(message.index),
+            ProcessParamFlags::from_bits_truncate(message.value),
+        )
+        .as_raw_ptr()
 }
 
 /// [`Plugin::tick`](plugin/trait.Plugin.html#tymethod.tick) FFI.
@@ -224,44 +358,6 @@ pub unsafe extern "C" fn plugin_tick(adapter: *mut PluginAdapter) {
 #[no_mangle]
 pub unsafe extern "C" fn plugin_midi_tick(adapter: *mut PluginAdapter) {
     (*adapter).0.midi_tick();
-}
-
-/// The result returned from dispatcher function.
-pub trait DispatcherResult {
-    /// Dispatcher result type should implement this method for interoperability with FL API.
-    fn as_intptr(&self) -> intptr_t;
-}
-
-impl DispatcherResult for String {
-    fn as_intptr(&self) -> intptr_t {
-        let value = CString::new(self.as_str()).expect("Unexpected CString::new failure");
-        // will the value still live when we return the pointer?
-        value.as_ptr().to_owned() as intptr_t
-    }
-}
-
-impl DispatcherResult for bool {
-    fn as_intptr(&self) -> intptr_t {
-        (self.to_owned() as u8).into()
-    }
-}
-
-impl DispatcherResult for i32 {
-    fn as_intptr(&self) -> intptr_t {
-        (*self) as intptr_t
-    }
-}
-
-impl DispatcherResult for u8 {
-    fn as_intptr(&self) -> intptr_t {
-        self.to_owned().into()
-    }
-}
-
-impl DispatcherResult for ParameterFlags {
-    fn as_intptr(&self) -> intptr_t {
-        self.bits()
-    }
 }
 
 impl From<u64> for MidiMessage {
@@ -333,6 +429,12 @@ bitflags! {
     }
 }
 
+impl AsRawPtr for ParameterFlags {
+    fn as_raw_ptr(&self) -> intptr_t {
+        self.bits()
+    }
+}
+
 bitflags! {
     /// Processing mode flags.
     pub struct ProcessModeFlags: isize {
@@ -345,7 +447,7 @@ bitflags! {
         const HQ_NON_REALTIME = 2;
         /// FL is rendering to file if this flag is set.
         const IS_RENDERING = 16;
-        /// (changed in FL 7.0) 3 bits value for interpolation quality
+        /// (changed in FL 7.0) 3 bits value for interpolation quality.
         ///
         /// - 0=none (obsolete)
         /// - 1=linear
@@ -361,13 +463,13 @@ bitflags! {
 bitflags! {
     /// Processing parameters flags
     pub struct ProcessParamFlags: isize {
-        /// Update the value of the parameter
+        /// Update the value of the parameter.
         const UPDATE_VALUE = 1;
-        /// Return the value of the parameter as the result of the function
+        /// Return the value of the parameter as the result of the function.
         const GET_VALUE = 2;
-        /// Update the hint if there is one
+        /// Update the hint if there is one.
         const SHOW_HINT = 4;
-        /// Update the parameter control (wheel, slider, ...)
+        /// Update the parameter control (wheel, slider, ...).
         const UPDATE_CONTROL = 16;
         /// A value between 0 and 65536 has to be translated to the range of the parameter control.
         ///
@@ -375,12 +477,12 @@ bitflags! {
         /// [ProcessParamFlags::GET_VALUE](
         /// struct.ProcessParamFlags.html#associatedconstant.GET_VALUE) isn't included.
         const FROM_MIDI = 32;
-        /// (internal) Don't check if wheels are linked
+        /// (internal) Don't check if wheels are linked.
         const NO_LINK = 1024;
         /// Sent by an internal controller. Internal controllers should pay attention to these,
-        /// to avoid Feedback of controller changes
+        /// to avoid Feedback of controller changes.
         const INTERNAL_CTRL = 2048;
-        /// This flag is free to be used by the plugin as it wishes
+        /// This flag is free to be used by the plugin as it wishes.
         const PLUG_RESERVED = 4096;
     }
 }
