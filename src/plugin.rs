@@ -74,5 +74,7 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe + Send + Sync + 'static {
     /// The processing function. The input buffer is empty for generator plugins.
     ///
     /// The buffers are in interlaced 32Bit float stereo format.
+    ///
+    /// Called from mixer thread.
     fn render(&mut self, _input: &[[f32; 2]], _output: &mut [[f32; 2]]) {}
 }

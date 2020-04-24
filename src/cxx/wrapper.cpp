@@ -129,7 +129,9 @@ void _stdcall PluginWrapper::Eff_Render(PWAV32FS SourceBuffer,
     plugin_eff_render(adapter, *SourceBuffer, *DestBuffer, Length);
 }
 
-void _stdcall PluginWrapper::Gen_Render(PWAV32FS DestBuffer, int &Length) {}
+void _stdcall PluginWrapper::Gen_Render(PWAV32FS DestBuffer, int &Length) {
+    plugin_gen_render(adapter, *DestBuffer, Length);
+}
 
 TVoiceHandle _stdcall PluginWrapper::TriggerVoice(PVoiceParams VoiceParams,
                                                   intptr_t SetTag) {

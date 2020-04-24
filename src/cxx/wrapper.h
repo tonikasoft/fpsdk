@@ -73,3 +73,5 @@ extern "C" void plugin_midi_tick(PluginAdapter *adapter);
 extern "C" void plugin_eff_render(PluginAdapter *adapter,
                                   const float source[1][2], float dest[1][2],
                                   int len);
+extern "C" void plugin_gen_render(PluginAdapter *adapter, float dest[1][2],
+                                  int len);

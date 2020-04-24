@@ -250,7 +250,7 @@ pub unsafe extern "C" fn plugin_midi_tick(adapter: *mut PluginAdapter) {
     (*adapter).0.midi_tick();
 }
 
-/// [`Plugin::eff_render`](plugin/trait.Plugin.html#tymethod.eff_render) FFI.
+/// [`Plugin::render`](plugin/trait.Plugin.html#tymethod.render) FFI for effects.
 ///
 /// It supposed to be used internally. Don't use it.
 ///
@@ -268,6 +268,24 @@ pub unsafe extern "C" fn plugin_eff_render(
     let input = std::slice::from_raw_parts(source, length as usize);
     let mut output = std::slice::from_raw_parts_mut(dest, length as usize);
     (*adapter).0.render(input, &mut output);
+}
+
+/// [`Plugin::render`](plugin/trait.Plugin.html#tymethod.render) FFI for generators.
+///
+/// It supposed to be used internally. Don't use it.
+///
+/// # Safety
+///
+/// Unsafe
+#[doc(hidden)]
+#[no_mangle]
+pub unsafe extern "C" fn plugin_gen_render(
+    adapter: *mut PluginAdapter,
+    dest: *mut [f32; 2],
+    length: i32,
+) {
+    let mut output = std::slice::from_raw_parts_mut(dest, length as usize);
+    (*adapter).0.render(&[[0.0, 0.0]], &mut output);
 }
 
 /// Raw pointer to value.
