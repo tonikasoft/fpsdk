@@ -1,7 +1,5 @@
-use std::cell::RefCell;
 #[cfg(unix)]
 use std::fs::OpenOptions;
-use std::panic::AssertUnwindSafe;
 use std::sync::Once;
 
 use log::{info, trace, LevelFilter};
@@ -12,9 +10,7 @@ use simplelog::{ConfigBuilder, WriteLogger};
 
 use fpsdk::host::{Event, GetName, Host, HostMessage};
 use fpsdk::plugin::{Plugin, PluginTag};
-use fpsdk::{
-    create_plugin, AsRawPtr, Info, InfoBuilder, ProcessParamFlags, ValuePtr,
-};
+use fpsdk::{create_plugin, AsRawPtr, AudioBuffer, Info, InfoBuilder, ProcessParamFlags, ValuePtr};
 
 static ONCE: Once = Once::new();
 const LOG_PATH: &str = "simple.log";
@@ -23,7 +19,6 @@ const LOG_PATH: &str = "simple.log";
 struct Test {
     host: Host,
     tag: PluginTag,
-    data: AssertUnwindSafe<RefCell<i32>>,
     param_names: Vec<String>,
 }
 
@@ -36,7 +31,6 @@ impl Plugin for Test {
         Self {
             host,
             tag,
-            data: AssertUnwindSafe(RefCell::new(10)),
             param_names: vec![
                 "Parameter 1".into(),
                 "Parameter 2".into(),
@@ -88,9 +82,19 @@ impl Plugin for Test {
     ) -> Box<dyn AsRawPtr> {
         info!(
             "{} process param: index {}, value {}, flags {:?}",
-            self.tag, index, value.get::<i32>(), flags
+            self.tag,
+            index,
+            value.get::<i32>(),
+            flags
         );
         Box::new(0)
+    }
+
+    fn render(&mut self, input: &[[f32; 2]], output: &mut [[f32; 2]]) {
+        input.iter().zip(output).for_each(|(inp, outp)| {
+            outp[0] = inp[0] * 0.25;
+            outp[1] = inp[1] * 0.25;
+        });
     }
 }
 

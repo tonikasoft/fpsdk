@@ -148,6 +148,128 @@ pub const WAVETABLE_SIZE: usize = 16384;
 #[allow(non_camel_case_types)]
 type intptr_t = isize;
 
+/// As far as we can't use trait objects to share them with C++, we need a concrete type. This type
+/// wraps user's plugin as a delegate and calls its methods.
+///
+/// This is for internal usage only and shouldn't be used directly.
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct PluginAdapter(pub Box<dyn Plugin>);
+
+fn plugin_info(adapter: &PluginAdapter) -> Info {
+    adapter.0.info()
+}
+
+fn print_adapter(adapter: &PluginAdapter) {
+    debug!("{:?}", adapter);
+}
+
+/// [`Plugin::on_message`](plugin/trait.Plugin.html#tymethod.on_message) FFI.
+///
+/// It supposed to be used internally. Don't use it.
+///
+/// # Safety
+///
+/// Unsafe
+#[doc(hidden)]
+#[no_mangle]
+pub unsafe extern "C" fn plugin_dispatcher(
+    adapter: *mut PluginAdapter,
+    message: ffi::Message,
+) -> intptr_t {
+    (*adapter).0.on_message(message.into()).as_raw_ptr()
+}
+
+fn plugin_name_of(adapter: &PluginAdapter, message: ffi::Message) -> String {
+    adapter.0.name_of(message.into())
+}
+
+/// [`Plugin::process_event`](plugin/trait.Plugin.html#tymethod.process_event) FFI.
+///
+/// It supposed to be used internally. Don't use it.
+///
+/// # Safety
+///
+/// Unsafe
+#[doc(hidden)]
+#[no_mangle]
+pub unsafe extern "C" fn plugin_process_event(
+    adapter: *mut PluginAdapter,
+    event: ffi::Message,
+) -> intptr_t {
+    (*adapter).0.process_event(event.into());
+    0
+}
+
+/// [`Plugin::process_param`](plugin/trait.Plugin.html#tymethod.process_param) FFI.
+///
+/// It supposed to be used internally. Don't use it.
+///
+/// # Safety
+///
+/// Unsafe
+#[doc(hidden)]
+#[no_mangle]
+pub unsafe extern "C" fn plugin_process_param(
+    adapter: *mut PluginAdapter,
+    message: ffi::Message,
+) -> intptr_t {
+    (*adapter)
+        .0
+        .process_param(
+            message.id as usize,
+            ValuePtr(message.index),
+            ProcessParamFlags::from_bits_truncate(message.value),
+        )
+        .as_raw_ptr()
+}
+
+/// [`Plugin::tick`](plugin/trait.Plugin.html#tymethod.tick) FFI.
+///
+/// It supposed to be used internally. Don't use it.
+///
+/// # Safety
+///
+/// Unsafe
+#[doc(hidden)]
+#[no_mangle]
+pub unsafe extern "C" fn plugin_tick(adapter: *mut PluginAdapter) {
+    (*adapter).0.tick();
+}
+
+/// [`Plugin::midi_tick`](plugin/trait.Plugin.html#tymethod.midi_tick) FFI.
+///
+/// It supposed to be used internally. Don't use it.
+///
+/// # Safety
+///
+/// Unsafe
+#[doc(hidden)]
+#[no_mangle]
+pub unsafe extern "C" fn plugin_midi_tick(adapter: *mut PluginAdapter) {
+    (*adapter).0.midi_tick();
+}
+
+/// [`Plugin::eff_render`](plugin/trait.Plugin.html#tymethod.eff_render) FFI.
+///
+/// It supposed to be used internally. Don't use it.
+///
+/// # Safety
+///
+/// Unsafe
+#[doc(hidden)]
+#[no_mangle]
+pub unsafe extern "C" fn plugin_eff_render(
+    adapter: *mut PluginAdapter,
+    source: *const [f32; 2],
+    dest: *mut [f32; 2],
+    length: i32,
+) {
+    let input = std::slice::from_raw_parts(source, length as usize);
+    let mut output = std::slice::from_raw_parts_mut(dest, length as usize);
+    (*adapter).0.render(input, &mut output);
+}
+
 /// Raw pointer to value.
 #[derive(Debug)]
 pub struct ValuePtr(intptr_t);
@@ -256,108 +378,6 @@ impl FromRawPtr for bool {
     fn from_raw_ptr(value: intptr_t) -> Self {
         value != 0
     }
-}
-
-/// As far as we can't use trait objects to share them with C++, we need a concrete type. This type
-/// wraps user's plugin as a delegate and calls its methods.
-///
-/// This is for internal usage only and shouldn't be used directly.
-#[doc(hidden)]
-#[derive(Debug)]
-pub struct PluginAdapter(pub Box<dyn Plugin>);
-
-fn plugin_info(adapter: &PluginAdapter) -> Info {
-    adapter.0.info()
-}
-
-fn print_adapter(adapter: &PluginAdapter) {
-    debug!("{:?}", adapter);
-}
-
-/// [`Plugin::on_message`](plugin/trait.Plugin.html#tymethod.on_message) FFI.
-///
-/// It supposed to be used internally. Don't use it.
-///
-/// # Safety
-///
-/// Unsafe
-#[doc(hidden)]
-#[no_mangle]
-pub unsafe extern "C" fn plugin_dispatcher(
-    adapter: *mut PluginAdapter,
-    message: ffi::Message,
-) -> intptr_t {
-    (*adapter).0.on_message(message.into()).as_raw_ptr()
-}
-
-fn plugin_name_of(adapter: &PluginAdapter, message: ffi::Message) -> String {
-    adapter.0.name_of(message.into())
-}
-
-/// [`Plugin::process_event`](plugin/trait.Plugin.html#tymethod.process_event) FFI.
-///
-/// It supposed to be used internally. Don't use it.
-///
-/// # Safety
-///
-/// Unsafe
-#[doc(hidden)]
-#[no_mangle]
-pub unsafe extern "C" fn plugin_process_event(
-    adapter: *mut PluginAdapter,
-    event: ffi::Message,
-) -> intptr_t {
-    (*adapter).0.process_event(event.into());
-    0
-}
-
-/// [`Plugin::process_param`](plugin/trait.Plugin.html#tymethod.process_param) FFI.
-///
-/// It supposed to be used internally. Don't use it.
-///
-/// # Safety
-///
-/// Unsafe
-#[doc(hidden)]
-#[no_mangle]
-pub unsafe extern "C" fn plugin_process_param(
-    adapter: *mut PluginAdapter,
-    message: ffi::Message,
-) -> intptr_t {
-    (*adapter)
-        .0
-        .process_param(
-            message.id as usize,
-            ValuePtr(message.index),
-            ProcessParamFlags::from_bits_truncate(message.value),
-        )
-        .as_raw_ptr()
-}
-
-/// [`Plugin::tick`](plugin/trait.Plugin.html#tymethod.tick) FFI.
-///
-/// It supposed to be used internally. Don't use it.
-///
-/// # Safety
-///
-/// Unsafe
-#[doc(hidden)]
-#[no_mangle]
-pub unsafe extern "C" fn plugin_tick(adapter: *mut PluginAdapter) {
-    (*adapter).0.tick();
-}
-
-/// [`Plugin::midi_tick`](plugin/trait.Plugin.html#tymethod.midi_tick) FFI.
-///
-/// It supposed to be used internally. Don't use it.
-///
-/// # Safety
-///
-/// Unsafe
-#[doc(hidden)]
-#[no_mangle]
-pub unsafe extern "C" fn plugin_midi_tick(adapter: *mut PluginAdapter) {
-    (*adapter).0.midi_tick();
 }
 
 impl From<u64> for MidiMessage {

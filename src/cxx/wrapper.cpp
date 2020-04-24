@@ -120,23 +120,13 @@ int _stdcall PluginWrapper::ProcessParam(int Index, int Value, int RECFlags) {
     return plugin_process_param(adapter, message);
 }
 
-//----------------
-// idle
-//----------------
 void _stdcall PluginWrapper::Idle_Public() {
     // if (_editor) _editor->doIdleStuff();
 }
 
-//----------------
-// effect
-//----------------
 void _stdcall PluginWrapper::Eff_Render(PWAV32FS SourceBuffer,
                                         PWAV32FS DestBuffer, int Length) {
-    float gain = _gain;
-    for (int ii = 0; ii < Length; ii++) {
-        (*DestBuffer)[ii][0] = (*SourceBuffer)[ii][0] * gain;
-        (*DestBuffer)[ii][1] = (*SourceBuffer)[ii][1] * gain;
-    }
+    plugin_eff_render(adapter, *SourceBuffer, *DestBuffer, Length);
 }
 
 void _stdcall PluginWrapper::Gen_Render(PWAV32FS DestBuffer, int &Length) {}

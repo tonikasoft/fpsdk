@@ -8,7 +8,7 @@ use crate::{AsRawPtr, Info, ProcessParamFlags, ValuePtr};
 pub type PluginTag = i32;
 
 /// This trait must be implemented for your plugin.
-pub trait Plugin: std::fmt::Debug + RefUnwindSafe {
+pub trait Plugin: std::fmt::Debug + RefUnwindSafe + Send + Sync + 'static {
     /// Initializer
     fn new(host: Host, tag: PluginTag) -> Self
     where
@@ -61,6 +61,8 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe {
     /// [`ProcessParamFlags::GET_VALUE`](
     /// ../struct.ProcessParamFlags.html#associatedconstant.GET_VALUE) is specified in `flags`, the
     /// result has to be the value of the parameter.
+    ///
+    /// Can be called from GUI or mixer threads.
     fn process_param(
         &mut self,
         _index: usize,
@@ -69,4 +71,8 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe {
     ) -> Box<dyn AsRawPtr> {
         Box::new(0)
     }
+    /// The processing function. The input buffer is empty for generator plugins.
+    ///
+    /// The buffers are in interlaced 32Bit float stereo format.
+    fn render(&mut self, _input: &[[f32; 2]], _output: &mut [[f32; 2]]) {}
 }
