@@ -10,9 +10,8 @@ char *init_str_from_rust(rust::String &value) {
     return res;
 }
 
-TFruityPlug &create_plug_instance_c(TFruityPlugHost &Host, int Tag,
-                                    rust::Box<PluginAdapter> adapter) {
-    Info info = plugin_info(*adapter);
+void *create_plug_instance_c(void *Host, int Tag, void *adapter) {
+    Info info = plugin_info(*(PluginAdapter *)adapter);
 
     char *lname = init_str_from_rust(info.long_name);
     char *sname = init_str_from_rust(info.short_name);
@@ -25,11 +24,15 @@ TFruityPlug &create_plug_instance_c(TFruityPlugHost &Host, int Tag,
                                                  (int)info.def_poly,
                                                  (int)info.num_out_ctrls,
                                                  (int)info.num_out_voices};
+    int ver = ((TFruityPlugHost *)Host)->HostVersion;
+    std::string sver = std::to_string(ver);
+    fplog(rust::Str(sver.c_str()));
+    fplog(rust::Str("host version above"));
 
-    PluginWrapper *wrapper =
-        new PluginWrapper(&Host, Tag, adapter.into_raw(), c_info);
+    PluginWrapper *wrapper = new PluginWrapper(
+        (TFruityPlugHost *)Host, Tag, (PluginAdapter *)adapter, c_info);
 
-    return *((TFruityPlug *)wrapper);
+    return wrapper;
 }
 
 PluginWrapper::PluginWrapper(TFruityPlugHost *Host, int Tag,
@@ -44,6 +47,7 @@ PluginWrapper::PluginWrapper(TFruityPlugHost *Host, int Tag,
     // parameter initialze
     _gain = 0.25;
     _params[0] = (1 << 16);
+    // _host->Dispatcher(HostTag, FHD_WantMIDIInput, 0, 1);
 }
 
 PluginWrapper::~PluginWrapper() {
@@ -120,9 +124,7 @@ int _stdcall PluginWrapper::ProcessParam(int Index, int Value, int RECFlags) {
     return plugin_process_param(adapter, message);
 }
 
-void _stdcall PluginWrapper::Idle_Public() {
-    plugin_idle(adapter);
-}
+void _stdcall PluginWrapper::Idle_Public() { plugin_idle(adapter); }
 
 void _stdcall PluginWrapper::Eff_Render(PWAV32FS SourceBuffer,
                                         PWAV32FS DestBuffer, int Length) {
@@ -156,7 +158,15 @@ void _stdcall PluginWrapper::NewTick() { plugin_tick(adapter); }
 
 void _stdcall PluginWrapper::MIDITick() { plugin_midi_tick(adapter); }
 
-void _stdcall PluginWrapper::MIDIIn(int &Msg) {}
+void _stdcall PluginWrapper::MIDIIn(int &Msg) {
+    MidiMessage message = {
+        (uint8_t)(Msg & 0xff),
+        (uint8_t)((Msg >> 8) & 0xff),
+        (uint8_t)((Msg >> 16) & 0xff),
+        (int)((Msg >> 24) & 0xff),
+    };
+    plugin_midi_in(adapter, message);
+}
 
 void _stdcall PluginWrapper::MsgIn(intptr_t Msg) {}
 

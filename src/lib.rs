@@ -103,21 +103,13 @@ pub mod ffi {
     extern "C" {
         include!("wrapper.h");
 
-        pub type TFruityPlug;
-        pub type TFruityPlugHost;
-
-        pub fn create_plug_instance_c(
-            host: &'static mut TFruityPlugHost,
-            tag: i32,
-            adapter: Box<PluginAdapter>,
-        ) -> &'static mut TFruityPlug;
-
         pub fn time_sig_from_raw(raw_time_sig: isize) -> TimeSignature;
     }
 
     extern "Rust" {
         type PluginAdapter;
 
+        fn fplog(message: &str);
         fn plugin_info(adapter: &PluginAdapter) -> Info;
         // Used for debugging
         fn print_adapter(adapter: &PluginAdapter);
@@ -147,6 +139,36 @@ pub const WAVETABLE_SIZE: usize = 16384;
 /// intptr_t alias
 #[allow(non_camel_case_types)]
 type intptr_t = isize;
+
+fn fplog(message: &str) {
+    debug!("{}", message);
+}
+
+/// Exposes your plugin from DLL. Accepts type name as input. The type should implement
+/// [`Plugin`](plugin/trait.Plugin.html) trait.
+#[macro_export]
+macro_rules! create_plugin {
+    ($pl:ty) => {
+        use std::os::raw::c_void;
+
+        extern "C" {
+            fn create_plug_instance_c(
+                host: *mut c_void,
+                tag: i32,
+                adapter: *mut c_void,
+            ) -> *mut c_void;
+        }
+
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        pub unsafe extern "C" fn CreatePlugInstance(host: *mut c_void, tag: i32) -> *mut c_void {
+            let ho = $crate::host::Host { version: 0 };
+            let plugin = <$pl as $crate::plugin::Plugin>::new(ho, tag);
+            let adapter = $crate::PluginAdapter(Box::new(plugin));
+            create_plug_instance_c(host, tag, Box::into_raw(Box::new(adapter)) as *mut c_void)
+        }
+    };
+}
 
 /// As far as we can't use trait objects to share them with C++, we need a concrete type. This type
 /// wraps user's plugin as a delegate and calls its methods.
@@ -301,6 +323,19 @@ pub unsafe extern "C" fn plugin_gen_render(
     (*adapter).0.render(&[[0.0, 0.0]], &mut output);
 }
 
+/// [`Plugin::midi_in`](plugin/trait.Plugin.html#tymethod.render) FFI.
+///
+/// It supposed to be used internally. Don't use it.
+///
+/// # Safety
+///
+/// Unsafe
+#[doc(hidden)]
+#[no_mangle]
+pub unsafe extern "C" fn plugin_midi_in(adapter: *mut PluginAdapter, message: MidiMessage) {
+    (*adapter).0.midi_in(message);
+}
+
 /// Raw pointer to value.
 #[derive(Debug)]
 pub struct ValuePtr(intptr_t);
@@ -408,63 +443,6 @@ impl FromRawPtr for String {
 impl FromRawPtr for bool {
     fn from_raw_ptr(value: intptr_t) -> Self {
         value != 0
-    }
-}
-
-impl From<u64> for MidiMessage {
-    fn from(value: u64) -> Self {
-        MidiMessage {
-            status: (value & 0xff) as u8,
-            data1: ((value >> 8) & 0xff) as u8,
-            data2: ((value >> 16) & 0xff) as u8,
-            port: -1,
-        }
-    }
-}
-
-impl fmt::Debug for MidiMessage {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("MidiMessage")
-            .field("status", &self.status)
-            .field("data1", &self.data1)
-            .field("data2", &self.data2)
-            .field("port", &self.port)
-            .finish()
-    }
-}
-
-impl fmt::Debug for Info {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Info")
-            .field("sdk_version", &self.sdk_version)
-            .field("long_name", &self.long_name)
-            .field("short_name", &self.short_name)
-            .field("flags", &self.flags)
-            .field("num_params", &self.num_params)
-            .field("def_poly", &self.def_poly)
-            .field("num_out_ctrls", &self.num_out_ctrls)
-            .field("num_out_voices", &self.num_out_voices)
-            .finish()
-    }
-}
-
-impl fmt::Debug for TimeSignature {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TimeSignature")
-            .field("steps_per_bar", &self.steps_per_bar)
-            .field("steps_per_beat", &self.steps_per_beat)
-            .field("ppq", &self.ppq)
-            .finish()
-    }
-}
-
-impl fmt::Debug for ffi::Message {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Message")
-            .field("id", &self.id)
-            .field("index", &self.index)
-            .field("value", &self.value)
-            .finish()
     }
 }
 
@@ -964,23 +942,61 @@ impl InfoBuilder {
     }
 }
 
-/// Exposes your plugin from DLL. Accepts type name as input. The type should implement
-/// [`Plugin`](plugin/trait.Plugin.html) trait.
-#[macro_export]
-macro_rules! create_plugin {
-    ($pl:ty) => {
-        #[allow(non_snake_case)]
-        #[no_mangle]
-        pub unsafe extern "C" fn CreatePlugInstance(
-            host: *mut $crate::ffi::TFruityPlugHost,
-            tag: i32,
-        ) -> *mut $crate::ffi::TFruityPlug {
-            let ho = $crate::host::Host { version: 0 };
-            let plugin = <$pl as $crate::plugin::Plugin>::new(ho, tag);
-            let adapter = $crate::PluginAdapter(Box::new(plugin));
-            $crate::ffi::create_plug_instance_c(&mut *host, tag, Box::new(adapter))
+impl From<u64> for MidiMessage {
+    fn from(value: u64) -> Self {
+        MidiMessage {
+            status: (value & 0xff) as u8,
+            data1: ((value >> 8) & 0xff) as u8,
+            data2: ((value >> 16) & 0xff) as u8,
+            port: -1,
         }
-    };
+    }
+}
+
+impl fmt::Debug for MidiMessage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MidiMessage")
+            .field("status", &self.status)
+            .field("data1", &self.data1)
+            .field("data2", &self.data2)
+            .field("port", &self.port)
+            .finish()
+    }
+}
+
+impl fmt::Debug for Info {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Info")
+            .field("sdk_version", &self.sdk_version)
+            .field("long_name", &self.long_name)
+            .field("short_name", &self.short_name)
+            .field("flags", &self.flags)
+            .field("num_params", &self.num_params)
+            .field("def_poly", &self.def_poly)
+            .field("num_out_ctrls", &self.num_out_ctrls)
+            .field("num_out_voices", &self.num_out_voices)
+            .finish()
+    }
+}
+
+impl fmt::Debug for TimeSignature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TimeSignature")
+            .field("steps_per_bar", &self.steps_per_bar)
+            .field("steps_per_beat", &self.steps_per_beat)
+            .field("ppq", &self.ppq)
+            .finish()
+    }
+}
+
+impl fmt::Debug for ffi::Message {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Message")
+            .field("id", &self.id)
+            .field("index", &self.index)
+            .field("value", &self.value)
+            .finish()
+    }
 }
 
 #[cfg(test)]

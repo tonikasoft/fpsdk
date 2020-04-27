@@ -2,7 +2,7 @@
 use std::panic::RefUnwindSafe;
 
 use crate::host::{Event, GetName, Host, HostMessage};
-use crate::{AsRawPtr, Info, ProcessParamFlags, ValuePtr};
+use crate::{AsRawPtr, Info, MidiMessage, ProcessParamFlags, ValuePtr};
 
 /// Plugin indentifier
 pub type PluginTag = i32;
@@ -33,22 +33,6 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe + Send + Sync + 'static {
     ///
     /// Can be called from GUI or mixer threads.
     fn process_event(&mut self, _event: Event) {}
-    /// Gets called before a new tick is mixed (not played), if the plugin added
-    /// [`PluginBuilder::want_new_tick`](../struct.InfoBuilder.html#method.want_new_tick) into
-    /// [`Info`](../struct.Info.html).
-    ///
-    /// Internal controller plugins should call
-    /// [`host::Host::on_control_change`](../host/struct.Host.html#method.on_control_change) from
-    /// here.
-    ///
-    /// Called from mixer thread.
-    fn tick(&mut self) {}
-    /// **NOT USED YET, OMIT THIS METHOD**
-    ///
-    /// This is called before a new midi tick is played (not mixed).
-    ///
-    /// Can be called from GUI or mixer threads.
-    fn midi_tick(&mut self) {}
     /// Something has to be done concerning a parameter. What exactly has to be done is explained
     /// by the `flags` parameter (see [`ProcessParamFlags`](../struct.ProcessParamFlags.html)).
     ///
@@ -77,10 +61,32 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe + Send + Sync + 'static {
     /// 
     /// Called from GUI thread.
     fn idle(&mut self) {}
+    /// Gets called before a new tick is mixed (not played), if the plugin added
+    /// [`PluginBuilder::want_new_tick`](../struct.InfoBuilder.html#method.want_new_tick) into
+    /// [`Info`](../struct.Info.html).
+    ///
+    /// Internal controller plugins should call
+    /// [`host::Host::on_control_change`](../host/struct.Host.html#method.on_control_change) from
+    /// here.
+    ///
+    /// Called from mixer thread.
+    fn tick(&mut self) {}
+    /// This is called before a new midi tick is played (not mixed).
+    ///
+    /// Can be called from GUI or mixer threads.
+    fn midi_tick(&mut self) {}
     /// The processing function. The input buffer is empty for generator plugins.
     ///
     /// The buffers are in interlaced 32Bit float stereo format.
     ///
     /// Called from mixer thread.
     fn render(&mut self, _input: &[[f32; 2]], _output: &mut [[f32; 2]]) {}
+    /// The host will call this when there's new MIDI data available. This function is only called
+    /// when the plugin has called the
+    /// [`host::Host::on_message`](../host/struct.Host.html#method.on_message) with
+    /// [`plugin::PluginMessage::WantMidiInput`](enum.PluginMessage.html#variant.WantMidiInput) and
+    /// value set to `true`.
+    ///
+    /// Can be called from GUI or mixer threads.
+    fn midi_in(&mut self, _message: MidiMessage) {}
 }

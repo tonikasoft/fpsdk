@@ -3,8 +3,9 @@
 #include "fp_plugclass.h"
 #include "rust/cxx.h"
 
-struct PluginAdapter;
 struct Message;
+struct MidiMessage;
+struct PluginAdapter;
 struct TimeSignature;
 
 class sample_editor {};
@@ -60,11 +61,10 @@ class PluginWrapper : public TFruityPlug {
     float _gain;
 };
 
-TFruityPlug &create_plug_instance_c(TFruityPlugHost &Host, int Tag,
-                                    rust::Box<PluginAdapter> adapter);
 TimeSignature time_sig_from_raw(intptr_t raw_time_sig);
 
-// Unsafe Rust functions
+// Unsafe Rust FFI
+extern "C" void *create_plug_instance_c(void *Host, int Tag, void *adapter);
 extern "C" intptr_t plugin_dispatcher(PluginAdapter *adapter, Message message);
 extern "C" intptr_t plugin_process_event(PluginAdapter *adapter, Message event);
 extern "C" intptr_t plugin_process_param(PluginAdapter *adapter, Message event);
@@ -76,3 +76,4 @@ extern "C" void plugin_eff_render(PluginAdapter *adapter,
                                   int len);
 extern "C" void plugin_gen_render(PluginAdapter *adapter, float dest[1][2],
                                   int len);
+extern "C" void plugin_midi_in(PluginAdapter *adapter, MidiMessage message);

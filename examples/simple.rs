@@ -10,7 +10,7 @@ use simplelog::{ConfigBuilder, WriteLogger};
 
 use fpsdk::host::{Event, GetName, Host, HostMessage};
 use fpsdk::plugin::{Plugin, PluginTag};
-use fpsdk::{create_plugin, AsRawPtr, Info, InfoBuilder, ProcessParamFlags, ValuePtr};
+use fpsdk::{create_plugin, AsRawPtr, Info, InfoBuilder, MidiMessage, ProcessParamFlags, ValuePtr};
 
 static ONCE: Once = Once::new();
 const LOG_PATH: &str = "simple.log";
@@ -92,6 +92,10 @@ impl Plugin for Test {
             flags
         );
         Box::new(0)
+    }
+
+    fn midi_in(&mut self, message: MidiMessage) {
+        trace!("receive MIDI message {:?}", message);
     }
 
     fn render(&mut self, input: &[[f32; 2]], output: &mut [[f32; 2]]) {
