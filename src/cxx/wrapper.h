@@ -68,6 +68,7 @@ TimeSignature time_sig_from_raw(intptr_t raw_time_sig);
 extern "C" intptr_t plugin_dispatcher(PluginAdapter *adapter, Message message);
 extern "C" intptr_t plugin_process_event(PluginAdapter *adapter, Message event);
 extern "C" intptr_t plugin_process_param(PluginAdapter *adapter, Message event);
+extern "C" void plugin_idle(PluginAdapter *adapter);
 extern "C" void plugin_tick(PluginAdapter *adapter);
 extern "C" void plugin_midi_tick(PluginAdapter *adapter);
 extern "C" void plugin_eff_render(PluginAdapter *adapter,

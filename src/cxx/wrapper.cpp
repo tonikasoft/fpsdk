@@ -121,7 +121,7 @@ int _stdcall PluginWrapper::ProcessParam(int Index, int Value, int RECFlags) {
 }
 
 void _stdcall PluginWrapper::Idle_Public() {
-    // if (_editor) _editor->doIdleStuff();
+    plugin_idle(adapter);
 }
 
 void _stdcall PluginWrapper::Eff_Render(PWAV32FS SourceBuffer,

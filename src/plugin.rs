@@ -71,6 +71,12 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe + Send + Sync + 'static {
     ) -> Box<dyn AsRawPtr> {
         Box::new(0)
     }
+    /// This function is called continuously. It allows the plugin to perform certain tasks that
+    /// are not time-critical and which do not take up a lot of time either. For example, in this
+    /// function you may show a hint message when the mouse moves over a control in the editor.
+    /// 
+    /// Called from GUI thread.
+    fn idle(&mut self) {}
     /// The processing function. The input buffer is empty for generator plugins.
     ///
     /// The buffers are in interlaced 32Bit float stereo format.

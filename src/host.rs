@@ -362,16 +362,10 @@ impl From<ffi::Message> for Event {
         debug!("Event::from {:?}", message);
 
         let result = match message.id {
-            0 => Event::Tempo(
-                f32::from_raw_ptr(message.index),
-                message.value as u32,
-            ),
+            0 => Event::Tempo(f32::from_raw_ptr(message.index), message.value as u32),
             1 => Event::MaxPoly(message.index as i32),
             2 => Event::MidiPan(message.index as u8, message.value as i8),
-            3 => Event::MidiVol(
-                message.index as u8,
-                f32::from_raw_ptr(message.value),
-            ),
+            3 => Event::MidiVol(message.index as u8, f32::from_raw_ptr(message.value)),
             4 => Event::MidiPitch(message.index as i32),
             _ => Event::Unknown,
         };

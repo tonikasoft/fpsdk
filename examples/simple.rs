@@ -10,7 +10,7 @@ use simplelog::{ConfigBuilder, WriteLogger};
 
 use fpsdk::host::{Event, GetName, Host, HostMessage};
 use fpsdk::plugin::{Plugin, PluginTag};
-use fpsdk::{create_plugin, AsRawPtr, AudioBuffer, Info, InfoBuilder, ProcessParamFlags, ValuePtr};
+use fpsdk::{create_plugin, AsRawPtr, Info, InfoBuilder, ProcessParamFlags, ValuePtr};
 
 static ONCE: Once = Once::new();
 const LOG_PATH: &str = "simple.log";
@@ -72,6 +72,10 @@ impl Plugin for Test {
 
     fn tick(&mut self) {
         trace!("{} receive new tick", self.tag);
+    }
+
+    fn idle(&mut self) {
+        trace!("{} idle", self.tag);
     }
 
     fn process_param(
