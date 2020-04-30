@@ -36,7 +36,7 @@ void *create_plug_instance_c(void *Host, int Tag, void *adapter) {
         (int)info->flags,         (int)info->num_params,    (int)info->def_poly,
         (int)info->num_out_ctrls, (int)info->num_out_voices};
 
-    free(info);
+    free_rbox_raw(info);
 
     int32_t ver = ((TFruityPlugHost *)Host)->HostVersion;
     std::string sver = std::to_string(ver);
@@ -64,7 +64,7 @@ PluginWrapper::~PluginWrapper() {
     free(Info->LongName);
     free(Info->ShortName);
     delete Info;
-    free(adapter);
+    free_rbox_raw(adapter);
 }
 
 void _stdcall PluginWrapper::SaveRestoreState(IStream *Stream, BOOL Save) {

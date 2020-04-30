@@ -122,6 +122,19 @@ fn print_adapter(adapter: &PluginAdapter) {
     debug!("{:?}", adapter);
 }
 
+/// FFI to free rust's Box::into_raw pointer.
+///
+/// It supposed to be used internally. Don't use it.
+///
+/// # Safety
+///
+/// Unsafe
+#[doc(hidden)]
+#[no_mangle]
+pub unsafe extern "C" fn free_rbox_raw(raw_ptr: *mut c_void) {
+    let _ = Box::from_raw(raw_ptr);
+}
+
 /// FFI to free rust's CString pointer.
 ///
 /// It supposed to be used internally. Don't use it.

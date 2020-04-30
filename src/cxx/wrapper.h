@@ -62,6 +62,8 @@ class PluginWrapper : public TFruityPlug {
 TimeSignature time_sig_from_raw(intptr_t raw_time_sig);
 
 // Unsafe Rust FFI
+//
+// PluginAdapter methods
 extern "C" void *create_plug_instance_c(void *Host, int Tag, void *adapter);
 extern "C" Info *plugin_info(PluginAdapter *adapter);
 extern "C" intptr_t plugin_dispatcher(PluginAdapter *adapter, Message message);
@@ -83,6 +85,9 @@ extern "C" int32_t istream_read(void *istream, uint8_t *data,
                              uint32_t size, uint32_t *read);
 extern "C" int32_t istream_write(void *istream, const uint8_t *data,
                                  uint32_t size, uint32_t *write);
+
+// Utility
+extern "C" void free_rbox_raw(void *raw_ptr);
 extern "C" void free_rstring(char *raw_str);
 // FFI to make C string (`char *`) managed by C side. Because `char *` produced
 // by `CString::into_raw` leads to memory leak. Here's what docs say about
