@@ -8,7 +8,16 @@ struct MidiMessage;
 struct PluginAdapter;
 struct TimeSignature;
 
-class sample_editor {};
+struct Info {
+    uint32_t sdk_version;
+    char *long_name;
+    char *short_name;
+    uint32_t flags;
+    uint32_t num_params;
+    uint32_t def_poly;
+    uint32_t num_out_ctrls;
+    uint32_t num_out_voices;
+};
 
 class PluginWrapper : public TFruityPlug {
   public:
@@ -46,28 +55,19 @@ class PluginWrapper : public TFruityPlug {
     virtual void _stdcall OutputVoice_Kill(TVoiceHandle Handle);
 
   protected:
-    // GUI
-    sample_editor *_editor;
-
-    // host
-    TFruityPlugHost *_host;
-
+    TFruityPlugHost *host;
     PluginAdapter *adapter;
-
-    // parameter
-    int _params[1024];
-
-    // gain
-    float _gain;
 };
 
 TimeSignature time_sig_from_raw(intptr_t raw_time_sig);
 
 // Unsafe Rust FFI
 extern "C" void *create_plug_instance_c(void *Host, int Tag, void *adapter);
+extern "C" Info *plugin_info(PluginAdapter *adapter);
 extern "C" intptr_t plugin_dispatcher(PluginAdapter *adapter, Message message);
 extern "C" intptr_t plugin_process_event(PluginAdapter *adapter, Message event);
 extern "C" intptr_t plugin_process_param(PluginAdapter *adapter, Message event);
+extern "C" char *plugin_name_of(const PluginAdapter *adapter, Message message);
 extern "C" void plugin_idle(PluginAdapter *adapter);
 extern "C" void plugin_tick(PluginAdapter *adapter);
 extern "C" void plugin_midi_tick(PluginAdapter *adapter);
@@ -77,3 +77,18 @@ extern "C" void plugin_eff_render(PluginAdapter *adapter,
 extern "C" void plugin_gen_render(PluginAdapter *adapter, float dest[1][2],
                                   int len);
 extern "C" void plugin_midi_in(PluginAdapter *adapter, MidiMessage message);
+extern "C" void plugin_save_state(PluginAdapter *adapter, IStream *istream);
+extern "C" void plugin_load_state(PluginAdapter *adapter, IStream *istream);
+extern "C" int32_t istream_read(void *istream, uint8_t *data,
+                             uint32_t size, uint32_t *read);
+extern "C" int32_t istream_write(void *istream, const uint8_t *data,
+                                 uint32_t size, uint32_t *write);
+extern "C" void free_rstring(char *raw_str);
+// FFI to make C string (`char *`) managed by C side. Because `char *` produced
+// by `CString::into_raw` leads to memory leak. Here's what docs say about
+// `CString::into_raw`:
+//
+// The pointer which this function returns must be returned to Rust and
+// reconstituted using from_raw to be properly deallocated. Specifically, one
+// should not use the standard C free() function to deallocate this string.
+extern "C" char *alloc_real_cstr(char *rust_cstr);

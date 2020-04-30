@@ -2,29 +2,43 @@
 #include "src/lib.rs.h"
 #include <cstring>
 
-char *init_str_from_rust(rust::String &value) {
-    char *res = new char[value.size()];
-    strcpy(res, value.data());
-    res[value.size()] = 0x0000;
+char *alloc_real_cstr(char *rust_cstr) {
+    char *result = (char *)malloc(strlen(rust_cstr) + 1);
+    strcpy(result, rust_cstr);
+    free_rstring(rust_cstr);
 
-    return res;
+    return result;
+}
+
+int32_t istream_read(void *istream, uint8_t *data, uint32_t size,
+                     uint32_t *read) {
+    if (!data || size < 1)
+        return 0x80004003; // E_POINTER
+
+    return (int32_t)((IStream *)istream)
+        ->Read(data, size, (unsigned long *)read);
+}
+
+int32_t istream_write(void *istream, const uint8_t *data, uint32_t size,
+                      uint32_t *write) {
+    if (!data || size < 1)
+        return 0x80004003; // E_POINTER
+
+    return (int32_t)((IStream *)istream)
+        ->Write(data, size, (unsigned long *)write);
 }
 
 void *create_plug_instance_c(void *Host, int Tag, void *adapter) {
-    Info info = plugin_info(*(PluginAdapter *)adapter);
+    Info *info = plugin_info((PluginAdapter *)adapter);
 
-    char *lname = init_str_from_rust(info.long_name);
-    char *sname = init_str_from_rust(info.short_name);
+    PFruityPlugInfo c_info = new TFruityPlugInfo{
+        (int)info->sdk_version,   info->long_name,          info->short_name,
+        (int)info->flags,         (int)info->num_params,    (int)info->def_poly,
+        (int)info->num_out_ctrls, (int)info->num_out_voices};
 
-    PFruityPlugInfo c_info = new TFruityPlugInfo{(int)info.sdk_version,
-                                                 lname,
-                                                 sname,
-                                                 (int)info.flags,
-                                                 (int)info.num_params,
-                                                 (int)info.def_poly,
-                                                 (int)info.num_out_ctrls,
-                                                 (int)info.num_out_voices};
-    int ver = ((TFruityPlugHost *)Host)->HostVersion;
+    free(info);
+
+    int32_t ver = ((TFruityPlugHost *)Host)->HostVersion;
     std::string sver = std::to_string(ver);
     fplog(rust::Str(sver.c_str()));
     fplog(rust::Str("host version above"));
@@ -40,44 +54,24 @@ PluginWrapper::PluginWrapper(TFruityPlugHost *Host, int Tag,
     Info = info;
     HostTag = Tag;
     EditorHandle = 0;
-    _host = Host;
-    _editor = nullptr;
+    host = Host;
     adapter = adap;
 
-    // parameter initialze
-    _gain = 0.25;
-    _params[0] = (1 << 16);
-    // _host->Dispatcher(HostTag, FHD_WantMIDIInput, 0, 1);
+    // host->Dispatcher(HostTag, FHD_WantMIDIInput, 0, 1);
 }
 
 PluginWrapper::~PluginWrapper() {
-    delete _editor;
-    delete Info->LongName;
-    delete Info->ShortName;
-    free(Info);
+    free(Info->LongName);
+    free(Info->ShortName);
+    delete Info;
     free(adapter);
 }
 
 void _stdcall PluginWrapper::SaveRestoreState(IStream *Stream, BOOL Save) {
     if (Save) {
-        // save paremeters
-        unsigned long length = 0;
-        Stream->Write(_params, sizeof(_params), &length);
+        plugin_save_state(adapter, Stream);
     } else {
-        // load paremeters
-        unsigned long length = 0;
-        Stream->Read(_params, sizeof(_params), &length);
-        for (int ii = 0; ii < Info->NumParams; ii++) {
-            if (ii == 0) {
-                _gain = static_cast<float>(_params[ii]) / (1 << 16);
-            }
-
-            // if( _editor != nullptr )
-            // {
-            // // send message to editor
-            // _editor->setParameter(ii, static_cast<float>(_params[ii]));
-            // }
-        }
+        plugin_load_state(adapter, Stream);
     }
 }
 
@@ -96,9 +90,9 @@ void _stdcall PluginWrapper::GetName(int Section, int Index, int Value,
         (intptr_t)Value,
     };
 
-    rust::String r_name = plugin_name_of(*adapter, message);
-    strcpy(Name, r_name.data());
-    Name[r_name.size()] = 0x0000;
+    char *name = plugin_name_of(adapter, message);
+    strcpy(Name, name);
+    free_rstring(name);
 }
 
 int _stdcall PluginWrapper::ProcessEvent(int EventID, int EventValue,
