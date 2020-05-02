@@ -131,20 +131,50 @@ void _stdcall PluginWrapper::Gen_Render(PWAV32FS DestBuffer, int &Length) {
 
 TVoiceHandle _stdcall PluginWrapper::TriggerVoice(PVoiceParams VoiceParams,
                                                   intptr_t SetTag) {
-    return TVoiceHandle();
+    LevelParams init_levels = {
+        VoiceParams->InitLevels.Pan,   VoiceParams->InitLevels.Vol,
+        VoiceParams->InitLevels.Pitch, VoiceParams->InitLevels.FCut,
+        VoiceParams->InitLevels.FRes,
+    };
+
+    LevelParams final_levels = {
+        VoiceParams->FinalLevels.Pan,   VoiceParams->FinalLevels.Vol,
+        VoiceParams->FinalLevels.Pitch, VoiceParams->FinalLevels.FCut,
+        VoiceParams->FinalLevels.FRes,
+    };
+
+    Params params = {
+        init_levels,
+        final_levels,
+    };
+
+    return (TVoiceHandle)voice_handler_trigger(adapter, params, (int)SetTag);
 }
 
-void _stdcall PluginWrapper::Voice_Release(TVoiceHandle Handle) {}
+void _stdcall PluginWrapper::Voice_Release(TVoiceHandle Handle) {
+    voice_handler_release(adapter, (void *)Handle);
+}
 
-void _stdcall PluginWrapper::Voice_Kill(TVoiceHandle Handle) {}
+void _stdcall PluginWrapper::Voice_Kill(TVoiceHandle Handle) {
+    voice_handler_kill(adapter, (void *)Handle);
+}
 
 int _stdcall PluginWrapper::Voice_ProcessEvent(TVoiceHandle Handle, int EventID,
                                                int EventValue, int Flags) {
+    Message message = {
+        (intptr_t)EventID,
+        (intptr_t)EventValue,
+        (intptr_t)Flags,
+    };
+
+    voice_handler_on_event(adapter, (void *)Handle, message);
+
     return 0;
 }
 
-int _stdcall PluginWrapper::Voice_Render(TVoiceHandle Handle,
-                                         PWAV32FS DestBuffer, int &Length) {
+int _stdcall PluginWrapper::Voice_Render(TVoiceHandle, PWAV32FS, int &) {
+    // Deprecated:
+    // https://forum.image-line.com/viewtopic.php?f=100&t=199515#p1371655
     return 0;
 }
 

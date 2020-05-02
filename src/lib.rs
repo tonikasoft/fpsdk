@@ -93,6 +93,7 @@ pub mod ffi {
 
 pub mod host;
 pub mod plugin;
+pub mod voice;
 
 use std::ffi::{CStr, CString};
 use std::fmt;
@@ -103,6 +104,9 @@ use log::{debug, error};
 
 pub use ffi::{MidiMessage, TimeSignature};
 use plugin::PluginAdapter;
+
+/// An identefier the host uses to identify plugin and voice instances.
+pub type Tag = i32;
 
 /// Current FL SDK version.
 pub const CURRENT_SDK_VERSION: u32 = 1;

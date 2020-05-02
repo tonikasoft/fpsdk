@@ -8,6 +8,7 @@ struct MidiMessage;
 struct PluginAdapter;
 struct TimeSignature;
 
+// from plugin.rs
 struct Info {
     uint32_t sdk_version;
     char *long_name;
@@ -17,6 +18,20 @@ struct Info {
     uint32_t def_poly;
     uint32_t num_out_ctrls;
     uint32_t num_out_voices;
+};
+
+// from voice.rs
+struct LevelParams {
+    float pan;
+    float vol;
+    float pitch;
+    float mod_x;
+    float mod_y;
+};
+
+struct Params {
+    LevelParams init_levels;
+    LevelParams final_levels;
 };
 
 class PluginWrapper : public TFruityPlug {
@@ -81,8 +96,16 @@ extern "C" void plugin_gen_render(PluginAdapter *adapter, float dest[1][2],
 extern "C" void plugin_midi_in(PluginAdapter *adapter, MidiMessage message);
 extern "C" void plugin_save_state(PluginAdapter *adapter, IStream *istream);
 extern "C" void plugin_load_state(PluginAdapter *adapter, IStream *istream);
-extern "C" int32_t istream_read(void *istream, uint8_t *data,
-                             uint32_t size, uint32_t *read);
+
+extern "C" intptr_t voice_handler_trigger(PluginAdapter *adpater, Params params,
+                                          int tag);
+extern "C" void voice_handler_release(PluginAdapter *adpater, void *voice);
+extern "C" void voice_handler_kill(PluginAdapter *adpater, void *voice);
+extern "C" void voice_handler_on_event(PluginAdapter *adpater, void *voice,
+                                       Message message);
+
+extern "C" int32_t istream_read(void *istream, uint8_t *data, uint32_t size,
+                                uint32_t *read);
 extern "C" int32_t istream_write(void *istream, const uint8_t *data,
                                  uint32_t size, uint32_t *write);
 

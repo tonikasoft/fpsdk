@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 #[cfg(unix)]
 use std::fs::OpenOptions;
 use std::io::{self, Read};
@@ -13,18 +14,20 @@ use simple_logging;
 use simplelog::{ConfigBuilder, WriteLogger};
 
 use fpsdk::host::{Event, GetName, Host, HostMessage};
-use fpsdk::plugin::{Info, InfoBuilder, Plugin, PluginTag, StateReader, StateWriter};
-use fpsdk::{create_plugin, AsRawPtr, MidiMessage, ProcessParamFlags, ValuePtr};
+use fpsdk::plugin::{Info, InfoBuilder, Plugin, StateReader, StateWriter};
+use fpsdk::voice::{self, Voice, VoiceHandler};
+use fpsdk::{create_plugin, AsRawPtr, MidiMessage, ProcessParamFlags, Tag, ValuePtr};
 
 static ONCE: Once = Once::new();
 const LOG_PATH: &str = "simple.log";
 
 #[derive(Debug)]
-struct Test {
+struct Simple {
     host: Host,
-    tag: PluginTag,
+    tag: Tag,
     param_names: Vec<String>,
     state: State,
+    voice_handler: SimpleVoiceHandler,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -34,8 +37,8 @@ struct State {
     _param_2: i64,
 }
 
-impl Plugin for Test {
-    fn new(host: Host, tag: i32) -> Self {
+impl Plugin for Simple {
+    fn new(host: Host, tag: Tag) -> Self {
         init_log();
 
         info!("init plugin with tag {}", tag);
@@ -48,19 +51,21 @@ impl Plugin for Test {
                 "Parameter 2".into(),
                 "Parameter 3".into(),
             ],
-            state: State::default(),
+            state: Default::default(),
+            voice_handler: Default::default(),
         }
     }
 
     fn info(&self) -> Info {
         info!("plugin {} will return info", self.tag);
 
-        InfoBuilder::new_effect("Simple", "Simple", self.param_names.len() as u32)
-            .want_new_tick()
+        InfoBuilder::new_full_gen("Simple", "Simple", self.param_names.len() as u32)
+            // InfoBuilder::new_effect("Simple", "Simple", self.param_names.len() as u32)
+            // .want_new_tick()
             .build()
     }
 
-    fn tag(&self) -> PluginTag {
+    fn tag(&self) -> Tag {
         self.tag
     }
 
@@ -143,10 +148,63 @@ impl Plugin for Test {
     }
 
     fn render(&mut self, input: &[[f32; 2]], output: &mut [[f32; 2]]) {
-        input.iter().zip(output).for_each(|(inp, outp)| {
-            outp[0] = inp[0] * 0.25;
-            outp[1] = inp[1] * 0.25;
-        });
+        if self.voice_handler.voices.len() < 1 {
+            // consider it an effect
+            input.iter().zip(output).for_each(|(inp, outp)| {
+                outp[0] = inp[0] * 0.25;
+                outp[1] = inp[1] * 0.25;
+            });
+        }
+    }
+
+    fn voice_handler(&mut self) -> &mut dyn VoiceHandler {
+        &mut self.voice_handler
+    }
+}
+
+#[derive(Debug, Default)]
+struct SimpleVoiceHandler {
+    voices: HashMap<Tag, SimpleVoice>,
+}
+
+impl VoiceHandler for SimpleVoiceHandler {
+    fn trigger(&mut self, params: voice::Params, tag: Tag) -> &mut dyn Voice {
+        let voice = SimpleVoice::new(params, tag);
+        trace!("trigger voice {:?}", voice);
+        self.voices.insert(tag, voice);
+        self.voices.get_mut(&tag).unwrap()
+    }
+
+    fn release(&mut self, tag: Tag) {
+        trace!("release voice {:?}", self.voices.get(&tag));
+    }
+
+    fn kill(&mut self, tag: Tag) {
+        trace!("host wants to kill voice with tag {}", tag);
+        trace!("kill voice {:?}", self.voices.remove(&tag));
+        trace!("remaining voices count {}, {:?}", self.voices.len(), self.voices);
+    }
+
+    fn on_event(&mut self, tag: Tag, event: voice::Event) {
+        trace!("event {:?} for voice {:?}", event, self.voices.get(&tag));
+    }
+}
+
+#[derive(Debug)]
+struct SimpleVoice {
+    tag: Tag,
+    params: voice::Params,
+}
+
+impl SimpleVoice {
+    pub fn new(params: voice::Params, tag: Tag) -> Self {
+        Self { tag, params }
+    }
+}
+
+impl Voice for SimpleVoice {
+    fn tag(&self) -> Tag {
+        self.tag
     }
 }
 
@@ -159,7 +217,7 @@ fn init_log() {
 
 #[cfg(windows)]
 fn _init_log() {
-    simple_logging::log_to_file(LOG_PATH, LevelFilter::Debug).unwrap();
+    simple_logging::log_to_file(LOG_PATH, LevelFilter::Trace).unwrap();
 }
 
 #[cfg(unix)]
@@ -173,7 +231,7 @@ fn _init_log() {
         .open(LOG_PATH)
         .unwrap();
     let config = ConfigBuilder::new().set_time_to_local(true).build();
-    let _ = WriteLogger::init(LevelFilter::Debug, config, file).unwrap();
+    let _ = WriteLogger::init(LevelFilter::Trace, config, file).unwrap();
 }
 
-create_plugin!(Test);
+create_plugin!(Simple);
