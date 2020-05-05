@@ -105,9 +105,6 @@ use log::{debug, error};
 pub use ffi::{MidiMessage, TimeSignature};
 use plugin::PluginAdapter;
 
-/// An identefier the host uses to identify plugin and voice instances.
-pub type Tag = i32;
-
 /// Current FL SDK version.
 pub const CURRENT_SDK_VERSION: u32 = 1;
 
@@ -117,6 +114,30 @@ pub const WAVETABLE_SIZE: usize = 16384;
 /// intptr_t alias
 #[allow(non_camel_case_types)]
 type intptr_t = isize;
+
+/// An identefier the host uses to identify plugin and voice instances.
+///
+/// To make it more type safe, `plugin` and `voice` modules provide their own `Tag` type.
+pub(crate) type Tag = i32;
+
+/// This macro is used internally to implement `Tag` type in a type-safe manner.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! implement_tag {
+    () => {
+        use std::fmt;
+
+        /// Identifier.
+        #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+        pub struct Tag(pub crate::Tag);
+
+        impl fmt::Display for Tag {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
+    };
+}
 
 fn fplog(message: &str) {
     debug!("{}", message);

@@ -56,8 +56,6 @@ PluginWrapper::PluginWrapper(TFruityPlugHost *Host, int Tag,
     EditorHandle = 0;
     host = Host;
     adapter = adap;
-
-    // host->Dispatcher(HostTag, FHD_WantMIDIInput, 0, 1);
 }
 
 PluginWrapper::~PluginWrapper() {
@@ -77,6 +75,11 @@ void _stdcall PluginWrapper::SaveRestoreState(IStream *Stream, BOOL Save) {
 
 intptr_t _stdcall PluginWrapper::Dispatcher(intptr_t ID, intptr_t Index,
                                             intptr_t Value) {
+
+    // if (ID == FPD_SetEnabled) {
+    // host->Dispatcher(HostTag, FHD_WantMIDIInput, 0, Value);
+    // }
+
     Message message = {ID, Index, Value};
 
     return plugin_dispatcher(adapter, message);
@@ -167,9 +170,7 @@ int _stdcall PluginWrapper::Voice_ProcessEvent(TVoiceHandle Handle, int EventID,
         (intptr_t)Flags,
     };
 
-    voice_handler_on_event(adapter, (void *)Handle, message);
-
-    return 0;
+    return voice_handler_on_event(adapter, (void *)Handle, message);
 }
 
 int _stdcall PluginWrapper::Voice_Render(TVoiceHandle, PWAV32FS, int &) {
@@ -198,15 +199,22 @@ int _stdcall PluginWrapper::OutputVoice_ProcessEvent(TOutVoiceHandle Handle,
                                                      int EventID,
                                                      int EventValue,
                                                      int Flags) {
-    return 0;
+    Message message = {
+        (intptr_t)EventID,
+        (intptr_t)EventValue,
+        (intptr_t)Flags,
+    };
+
+    return out_voice_handler_on_event(adapter, (void *)Handle, message);
 }
 
-void _stdcall PluginWrapper::OutputVoice_Kill(TVoiceHandle Handle) {}
+void _stdcall PluginWrapper::OutputVoice_Kill(TVoiceHandle Handle) {
+    out_voice_handler_kill(adapter, (void *)Handle);
+}
 
 TimeSignature time_sig_from_raw(intptr_t raw_time_sig) {
     PTimeSigInfo time_sig = (TTimeSigInfo *)raw_time_sig;
 
-    return TimeSignature{(uint32_t)time_sig->StepsPerBar,
-                         (uint32_t)time_sig->StepsPerBeat,
-                         (uint32_t)time_sig->PPQ};
+    return {(uint32_t)time_sig->StepsPerBar, (uint32_t)time_sig->StepsPerBeat,
+            (uint32_t)time_sig->PPQ};
 }

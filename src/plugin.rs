@@ -10,9 +10,11 @@ use log::{debug, error};
 use crate::host::{Event, GetName, Host, HostMessage};
 use crate::voice::VoiceHandler;
 use crate::{
-    alloc_real_cstr, ffi, intptr_t, AsRawPtr, MidiMessage, ProcessParamFlags, Tag, ValuePtr,
+    alloc_real_cstr, ffi, intptr_t, AsRawPtr, MidiMessage, ProcessParamFlags, ValuePtr,
     CURRENT_SDK_VERSION,
 };
+
+crate::implement_tag!();
 
 /// Exposes your plugin from DLL. Accepts type name as input. The type should implement
 /// [`Plugin`](plugin/trait.Plugin.html) trait.
@@ -33,9 +35,13 @@ macro_rules! create_plugin {
         #[no_mangle]
         pub unsafe extern "C" fn CreatePlugInstance(host: *mut c_void, tag: i32) -> *mut c_void {
             let ho = $crate::host::Host { version: 0 };
-            let plugin = <$pl as $crate::plugin::Plugin>::new(ho, tag);
+            let plugin = <$pl as $crate::plugin::Plugin>::new(ho, $crate::plugin::Tag(tag));
             let adapter = $crate::plugin::PluginAdapter(Box::new(plugin));
-            create_plug_instance_c(host, tag, Box::into_raw(Box::new(adapter)) as *mut c_void)
+            create_plug_instance_c(
+                host,
+                tag,
+                Box::into_raw(Box::new(adapter)) as *mut c_void,
+            )
         }
     };
 }
@@ -48,9 +54,6 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe + Send + Sync + 'static {
         Self: Sized;
     /// Get plugin [`Info`](struct.Info.html).
     fn info(&self) -> Info;
-    /// Get plugin tag. You should store it when [`Plugin::new`](trait.Plugin.html#tymethod.new) is
-    /// called.
-    fn tag(&self) -> Tag;
     /// Save plugin's state.
     fn save_state(&mut self, writer: StateWriter);
     /// Load plugin's state.
@@ -415,7 +418,7 @@ fn check_hresult(result: HRESULT, read: usize, error_msg: &str) -> io::Result<us
 #[derive(Debug)]
 pub struct PluginAdapter(pub Box<dyn Plugin>);
 
-/// [`Plugin::on_message`](trait.Plugin.html#tymethod.on_message) FFI.
+/// [`Plugin::info`](trait.Plugin.html#tymethod.info) FFI.
 ///
 /// It supposed to be used internally. Don't use it.
 ///

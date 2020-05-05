@@ -101,8 +101,11 @@ extern "C" intptr_t voice_handler_trigger(PluginAdapter *adpater, Params params,
                                           int tag);
 extern "C" void voice_handler_release(PluginAdapter *adpater, void *voice);
 extern "C" void voice_handler_kill(PluginAdapter *adpater, void *voice);
-extern "C" void voice_handler_on_event(PluginAdapter *adpater, void *voice,
-                                       Message message);
+extern "C" intptr_t voice_handler_on_event(PluginAdapter *adpater, void *voice,
+                                           Message message);
+extern "C" void out_voice_handler_kill(PluginAdapter *adpater, void *voice);
+extern "C" intptr_t out_voice_handler_on_event(PluginAdapter *adpater,
+                                               void *voice, Message message);
 
 extern "C" int32_t istream_read(void *istream, uint8_t *data, uint32_t size,
                                 uint32_t *read);

@@ -14,9 +14,9 @@ use simple_logging;
 use simplelog::{ConfigBuilder, WriteLogger};
 
 use fpsdk::host::{Event, GetName, Host, HostMessage};
-use fpsdk::plugin::{Info, InfoBuilder, Plugin, StateReader, StateWriter};
-use fpsdk::voice::{self, Voice, VoiceHandler};
-use fpsdk::{create_plugin, AsRawPtr, MidiMessage, ProcessParamFlags, Tag, ValuePtr};
+use fpsdk::plugin::{self, Info, InfoBuilder, Plugin, StateReader, StateWriter};
+use fpsdk::voice::{self, OutVoiceHandler, Voice, VoiceHandler};
+use fpsdk::{create_plugin, AsRawPtr, MidiMessage, ProcessParamFlags, ValuePtr};
 
 static ONCE: Once = Once::new();
 const LOG_PATH: &str = "simple.log";
@@ -24,7 +24,7 @@ const LOG_PATH: &str = "simple.log";
 #[derive(Debug)]
 struct Simple {
     host: Host,
-    tag: Tag,
+    tag: plugin::Tag,
     param_names: Vec<String>,
     state: State,
     voice_handler: SimpleVoiceHandler,
@@ -38,7 +38,7 @@ struct State {
 }
 
 impl Plugin for Simple {
-    fn new(host: Host, tag: Tag) -> Self {
+    fn new(host: Host, tag: plugin::Tag) -> Self {
         init_log();
 
         info!("init plugin with tag {}", tag);
@@ -62,11 +62,8 @@ impl Plugin for Simple {
         InfoBuilder::new_full_gen("Simple", "Simple", self.param_names.len() as u32)
             // InfoBuilder::new_effect("Simple", "Simple", self.param_names.len() as u32)
             // .want_new_tick()
+            .with_out_voices(1)
             .build()
-    }
-
-    fn tag(&self) -> Tag {
-        self.tag
     }
 
     fn save_state(&mut self, writer: StateWriter) {
@@ -164,47 +161,71 @@ impl Plugin for Simple {
 
 #[derive(Debug, Default)]
 struct SimpleVoiceHandler {
-    voices: HashMap<Tag, SimpleVoice>,
+    voices: HashMap<voice::Tag, SimpleVoice>,
+    out_handler: SimpleOutVoiceHandler,
 }
 
 impl VoiceHandler for SimpleVoiceHandler {
-    fn trigger(&mut self, params: voice::Params, tag: Tag) -> &mut dyn Voice {
+    fn trigger(&mut self, params: voice::Params, tag: voice::Tag) -> &mut dyn Voice {
         let voice = SimpleVoice::new(params, tag);
         trace!("trigger voice {:?}", voice);
         self.voices.insert(tag, voice);
         self.voices.get_mut(&tag).unwrap()
     }
 
-    fn release(&mut self, tag: Tag) {
+    fn release(&mut self, tag: voice::Tag) {
         trace!("release voice {:?}", self.voices.get(&tag));
     }
 
-    fn kill(&mut self, tag: Tag) {
+    fn kill(&mut self, tag: voice::Tag) {
         trace!("host wants to kill voice with tag {}", tag);
         trace!("kill voice {:?}", self.voices.remove(&tag));
-        trace!("remaining voices count {}, {:?}", self.voices.len(), self.voices);
+        trace!(
+            "remaining voices count {}, {:?}",
+            self.voices.len(),
+            self.voices
+        );
     }
 
-    fn on_event(&mut self, tag: Tag, event: voice::Event) {
+    fn on_event(&mut self, tag: voice::Tag, event: voice::Event) -> Box<dyn AsRawPtr> {
         trace!("event {:?} for voice {:?}", event, self.voices.get(&tag));
+        Box::new(0)
+    }
+
+    fn out_handler(&mut self) -> Option<&mut dyn OutVoiceHandler> {
+        Some(&mut self.out_handler)
     }
 }
 
 #[derive(Debug)]
 struct SimpleVoice {
-    tag: Tag,
+    tag: voice::Tag,
     params: voice::Params,
 }
 
 impl SimpleVoice {
-    pub fn new(params: voice::Params, tag: Tag) -> Self {
+    pub fn new(params: voice::Params, tag: voice::Tag) -> Self {
         Self { tag, params }
     }
 }
 
 impl Voice for SimpleVoice {
-    fn tag(&self) -> Tag {
+    fn tag(&self) -> voice::Tag {
         self.tag
+    }
+}
+
+#[derive(Debug, Default)]
+struct SimpleOutVoiceHandler;
+
+impl OutVoiceHandler for SimpleOutVoiceHandler {
+    fn kill(&mut self, tag: voice::Tag) {
+        trace!("kill out voice with tag {}", tag);
+    }
+
+    fn on_event(&mut self, tag: voice::Tag, event: voice::OutEvent) -> Box<dyn AsRawPtr> {
+        trace!("event {:?} on out voice {}", event, tag);
+        Box::new(0)
     }
 }
 
