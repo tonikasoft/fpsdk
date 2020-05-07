@@ -2,7 +2,7 @@ use std::collections::HashMap;
 #[cfg(unix)]
 use std::fs::OpenOptions;
 use std::io::{self, Read};
-use std::sync::Once;
+use std::sync::{Arc, Mutex, Once};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use bincode;
@@ -13,7 +13,7 @@ use simple_logging;
 #[cfg(unix)]
 use simplelog::{ConfigBuilder, WriteLogger};
 
-use fpsdk::host::{Event, GetName, Host, HostMessage};
+use fpsdk::host::{Event, GetName, Host, HostMessage, OutVoicer};
 use fpsdk::plugin::{self, Info, InfoBuilder, Plugin, StateReader, StateWriter};
 use fpsdk::voice::{self, OutVoiceHandler, Voice, VoiceHandler};
 use fpsdk::{create_plugin, AsRawPtr, MidiMessage, ProcessParamFlags, ValuePtr};
@@ -44,6 +44,7 @@ impl Plugin for Simple {
         info!("init plugin with tag {}", tag);
 
         Self {
+            voice_handler: SimpleVoiceHandler::new(host.out_voice_handler()),
             host,
             tag,
             param_names: vec![
@@ -52,7 +53,6 @@ impl Plugin for Simple {
                 "Parameter 3".into(),
             ],
             state: Default::default(),
-            voice_handler: Default::default(),
         }
     }
 
@@ -159,22 +159,39 @@ impl Plugin for Simple {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct SimpleVoiceHandler {
     voices: HashMap<voice::Tag, SimpleVoice>,
     out_handler: SimpleOutVoiceHandler,
+    send_out_handler: Arc<Mutex<OutVoicer>>,
+}
+
+impl SimpleVoiceHandler {
+    fn new(send_out_handler: Arc<Mutex<OutVoicer>>) -> Self {
+        Self {
+            voices: HashMap::new(),
+            out_handler: SimpleOutVoiceHandler::default(),
+            send_out_handler,
+        }
+    }
 }
 
 impl VoiceHandler for SimpleVoiceHandler {
     fn trigger(&mut self, params: voice::Params, tag: voice::Tag) -> &mut dyn Voice {
-        let voice = SimpleVoice::new(params, tag);
+        let voice = SimpleVoice::new(params.clone(), tag);
         trace!("trigger voice {:?}", voice);
         self.voices.insert(tag, voice);
-        self.voices.get_mut(&tag).unwrap()
+        let voice_ref = self.voices.get_mut(&tag).unwrap();
+        let mut handler = self.send_out_handler.lock().unwrap();
+
+        handler.trigger(params, 0, tag);
+
+        voice_ref
     }
 
     fn release(&mut self, tag: voice::Tag) {
         trace!("release voice {:?}", self.voices.get(&tag));
+        self.send_out_handler.lock().unwrap().release(tag);
     }
 
     fn kill(&mut self, tag: voice::Tag) {
@@ -223,9 +240,9 @@ impl OutVoiceHandler for SimpleOutVoiceHandler {
         trace!("kill out voice with tag {}", tag);
     }
 
-    fn on_event(&mut self, tag: voice::Tag, event: voice::OutEvent) -> Box<dyn AsRawPtr> {
+    fn on_event(&mut self, tag: voice::Tag, event: voice::Event) -> Option<ValuePtr> {
         trace!("event {:?} on out voice {}", event, tag);
-        Box::new(0)
+        None
     }
 }
 

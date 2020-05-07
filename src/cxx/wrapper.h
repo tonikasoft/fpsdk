@@ -79,7 +79,8 @@ TimeSignature time_sig_from_raw(intptr_t raw_time_sig);
 // Unsafe Rust FFI
 //
 // PluginAdapter methods
-extern "C" void *create_plug_instance_c(void *Host, int Tag, void *adapter);
+extern "C" void *create_plug_instance_c(void *host, intptr_t tag,
+                                        void *adapter);
 extern "C" Info *plugin_info(PluginAdapter *adapter);
 extern "C" intptr_t plugin_dispatcher(PluginAdapter *adapter, Message message);
 extern "C" intptr_t plugin_process_event(PluginAdapter *adapter, Message event);
@@ -97,20 +98,28 @@ extern "C" void plugin_midi_in(PluginAdapter *adapter, MidiMessage message);
 extern "C" void plugin_save_state(PluginAdapter *adapter, IStream *istream);
 extern "C" void plugin_load_state(PluginAdapter *adapter, IStream *istream);
 
+// Voice handler
 extern "C" intptr_t voice_handler_trigger(PluginAdapter *adpater, Params params,
-                                          int tag);
+                                          intptr_t tag);
 extern "C" void voice_handler_release(PluginAdapter *adpater, void *voice);
 extern "C" void voice_handler_kill(PluginAdapter *adpater, void *voice);
 extern "C" intptr_t voice_handler_on_event(PluginAdapter *adpater, void *voice,
                                            Message message);
-extern "C" void out_voice_handler_kill(PluginAdapter *adpater, void *voice);
+extern "C" void out_voice_handler_kill(PluginAdapter *adpater, intptr_t tag);
 extern "C" intptr_t out_voice_handler_on_event(PluginAdapter *adpater,
-                                               void *voice, Message message);
-
+                                               intptr_t tag, Message message);
+// IStream
 extern "C" int32_t istream_read(void *istream, uint8_t *data, uint32_t size,
                                 uint32_t *read);
 extern "C" int32_t istream_write(void *istream, const uint8_t *data,
                                  uint32_t size, uint32_t *write);
+// Host
+extern "C" intptr_t host_trig_out_voice(void *host, Params *params,
+                                        int32_t index, intptr_t tag);
+extern "C" void host_release_out_voice(void *host, intptr_t tag);
+extern "C" void host_kill_out_voice(void *host, intptr_t tag);
+extern "C" intptr_t host_on_out_voice_event(void *host, intptr_t tag,
+                                            Message message);
 
 // Utility
 extern "C" void free_rbox_raw(void *raw_ptr);

@@ -2,6 +2,13 @@
 #include "src/lib.rs.h"
 #include <cstring>
 
+TimeSignature time_sig_from_raw(intptr_t raw_time_sig) {
+    PTimeSigInfo time_sig = (TTimeSigInfo *)raw_time_sig;
+
+    return {(uint32_t)time_sig->StepsPerBar, (uint32_t)time_sig->StepsPerBeat,
+            (uint32_t)time_sig->PPQ};
+}
+
 char *alloc_real_cstr(char *rust_cstr) {
     char *result = (char *)malloc(strlen(rust_cstr) + 1);
     strcpy(result, rust_cstr);
@@ -28,7 +35,7 @@ int32_t istream_write(void *istream, const uint8_t *data, uint32_t size,
         ->Write(data, size, (unsigned long *)write);
 }
 
-void *create_plug_instance_c(void *Host, int Tag, void *adapter) {
+void *create_plug_instance_c(void *host, intptr_t tag, void *adapter) {
     Info *info = plugin_info((PluginAdapter *)adapter);
 
     PFruityPlugInfo c_info = new TFruityPlugInfo{
@@ -38,13 +45,13 @@ void *create_plug_instance_c(void *Host, int Tag, void *adapter) {
 
     free_rbox_raw(info);
 
-    int32_t ver = ((TFruityPlugHost *)Host)->HostVersion;
+    int ver = ((TFruityPlugHost *)host)->HostVersion;
     std::string sver = std::to_string(ver);
     fplog(rust::Str(sver.c_str()));
     fplog(rust::Str("host version above"));
 
     PluginWrapper *wrapper = new PluginWrapper(
-        (TFruityPlugHost *)Host, Tag, (PluginAdapter *)adapter, c_info);
+        (TFruityPlugHost *)host, tag, (PluginAdapter *)adapter, c_info);
 
     return wrapper;
 }
@@ -151,7 +158,7 @@ TVoiceHandle _stdcall PluginWrapper::TriggerVoice(PVoiceParams VoiceParams,
         final_levels,
     };
 
-    return (TVoiceHandle)voice_handler_trigger(adapter, params, (int)SetTag);
+    return (TVoiceHandle)voice_handler_trigger(adapter, params, SetTag);
 }
 
 void _stdcall PluginWrapper::Voice_Release(TVoiceHandle Handle) {
@@ -205,16 +212,30 @@ int _stdcall PluginWrapper::OutputVoice_ProcessEvent(TOutVoiceHandle Handle,
         (intptr_t)Flags,
     };
 
-    return out_voice_handler_on_event(adapter, (void *)Handle, message);
+    return out_voice_handler_on_event(adapter, Handle, message);
 }
 
 void _stdcall PluginWrapper::OutputVoice_Kill(TVoiceHandle Handle) {
-    out_voice_handler_kill(adapter, (void *)Handle);
+    out_voice_handler_kill(adapter, Handle);
 }
 
-TimeSignature time_sig_from_raw(intptr_t raw_time_sig) {
-    PTimeSigInfo time_sig = (TTimeSigInfo *)raw_time_sig;
+intptr_t host_trig_out_voice(void *host, Params *params, int32_t index,
+                             intptr_t tag) {
+    return (intptr_t)((TFruityPlugHost *)host)
+        ->TriggerOutputVoice((TVoiceParams *)params, index, tag);
+}
 
-    return {(uint32_t)time_sig->StepsPerBar, (uint32_t)time_sig->StepsPerBeat,
-            (uint32_t)time_sig->PPQ};
+void host_release_out_voice(void *host, intptr_t tag) {
+    ((TFruityPlugHost *)host)
+        ->OutputVoice_Release((TOutVoiceHandle)tag);
+}
+
+void host_kill_out_voice(void *host, intptr_t tag) {
+    ((TFruityPlugHost *)host)->OutputVoice_Kill((TOutVoiceHandle)tag);
+}
+
+intptr_t host_on_out_voice_event(void *host, intptr_t tag, Message message) {
+    return ((TFruityPlugHost *)host)
+        ->OutputVoice_ProcessEvent((TOutVoiceHandle)tag, message.id,
+                                   message.index, message.value);
 }

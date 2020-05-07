@@ -70,6 +70,7 @@ pub mod ffi {
         pub port: i32,
     }
 
+    #[derive(Clone)]
     pub struct Message {
         pub id: isize,
         pub index: isize,
@@ -113,12 +114,13 @@ pub const WAVETABLE_SIZE: usize = 16384;
 
 /// intptr_t alias
 #[allow(non_camel_case_types)]
-type intptr_t = isize;
+#[doc(hidden)]
+pub type intptr_t = isize;
 
 /// An identefier the host uses to identify plugin and voice instances.
 ///
 /// To make it more type safe, `plugin` and `voice` modules provide their own `Tag` type.
-pub(crate) type Tag = i32;
+pub(crate) type Tag = intptr_t;
 
 /// This macro is used internally to implement `Tag` type in a type-safe manner.
 #[doc(hidden)]

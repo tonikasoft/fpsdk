@@ -1,10 +1,15 @@
 //! Plugin's host (FL Studio).
+use std::collections::HashMap;
 use std::ffi::c_void;
+use std::sync::atomic::AtomicPtr;
+use std::sync::{Arc, Mutex};
 
-use log::debug;
+use log::trace;
 
+use crate::voice::{self, OutVoiceHandler, Voice};
 use crate::{
-    ffi, FromRawPtr, MidiMessage, ProcessModeFlags, TimeSignature, Transport, WAVETABLE_SIZE,
+    ffi, intptr_t, FromRawPtr, MidiMessage, ProcessModeFlags, TimeSignature, Transport, ValuePtr,
+    WAVETABLE_SIZE,
 };
 
 /// [`Host::in_buf`](struct.Host.html#method.in_buf) flag, which is added before adding to the
@@ -21,9 +26,151 @@ pub const IO_FILLED: i32 = 1;
 /// Plugin host.
 #[derive(Debug)]
 pub struct Host {
-    /// The version of FL Studio. It is stored in one integer. If the version of FL Studio would be
-    /// 1.2.3 for example, `version` would be 1002003
-    pub version: i32,
+    out_voicer: Arc<Mutex<OutVoicer>>,
+    host_ptr: AtomicPtr<c_void>,
+}
+
+impl Host {
+    /// Initializer.
+    pub fn new(host_ptr: *mut c_void) -> Self {
+        let out_voicer = Arc::new(Mutex::new(OutVoicer::new(AtomicPtr::new(host_ptr))));
+        Self {
+            out_voicer,
+            host_ptr: AtomicPtr::new(host_ptr),
+        }
+    }
+
+    /// Get the version of FL Studio. It is stored in one integer. If the version of FL Studio
+    /// would be 1.2.3 for example, `version` would be 1002003
+    pub fn version(&self) -> i32 {
+        todo!()
+    }
+
+    /// Get [`OutVoicer`](struct.OutVoicer.html).
+    pub fn out_voice_handler(&self) -> Arc<Mutex<OutVoicer>> {
+        Arc::clone(&self.out_voicer)
+    }
+}
+
+/// Use this for operations with output voices (i.e. for VFX inside [patcher](
+/// https://www.image-line.com/support/flstudio_online_manual/html/plugins/Patcher.htm)).
+#[derive(Debug)]
+pub struct OutVoicer {
+    voices: HashMap<voice::Tag, OutVoice>,
+    host_ptr: AtomicPtr<c_void>,
+}
+
+impl OutVoicer {
+    fn new(host_ptr: AtomicPtr<c_void>) -> Self {
+        Self {
+            voices: HashMap::new(),
+            host_ptr,
+        }
+    }
+}
+
+impl OutVoiceHandler for OutVoicer {
+    /// It returns `None` if the output has no destination.
+    fn trigger(
+        &mut self,
+        params: voice::Params,
+        index: usize,
+        tag: voice::Tag,
+    ) -> Option<&mut dyn Voice> {
+        let params_ptr = Box::into_raw(Box::new(params));
+        let inner_tag = unsafe {
+            host_trig_out_voice(*self.host_ptr.get_mut(), params_ptr, index as i32, tag.0)
+        };
+
+        if inner_tag == -1 {
+            // if FVH_Null
+            unsafe { Box::from_raw(params_ptr) }; // free the memory
+            trace!("send trigger voice is null");
+            return None;
+        }
+
+        let voice = OutVoice::new(tag, AtomicPtr::new(params_ptr), voice::Tag(inner_tag));
+        trace!("send trigger output voice {:?}", voice);
+        self.voices.insert(tag, voice);
+        Some(self.voices.get_mut(&tag).unwrap())
+    }
+
+    fn release(&mut self, tag: voice::Tag) {
+        if let Some(voice) = self.voices.get_mut(&tag) {
+            trace!("send release output voice {:?}", voice);
+            unsafe { host_release_out_voice(*self.host_ptr.get_mut(), voice.inner_tag().0) }
+        }
+    }
+
+    fn kill(&mut self, tag: voice::Tag) {
+        if let Some(mut voice) = self.voices.remove(&tag) {
+            trace!("send kill output voice {}", tag);
+            unsafe {
+                host_kill_out_voice(*self.host_ptr.get_mut(), voice.inner_tag().0);
+                Box::from_raw(*voice.params_ptr.get_mut());
+            };
+        }
+    }
+
+    fn on_event(&mut self, tag: voice::Tag, event: voice::Event) -> Option<ValuePtr> {
+        trace!("send event {:?} for out voice {:?}", event, tag);
+        let host_ptr = *self.host_ptr.get_mut();
+        self.voices.get_mut(&tag).and_then(|voice| {
+            Option::<ffi::Message>::from(event).map(|message| {
+                ValuePtr(unsafe { host_on_out_voice_event(host_ptr, voice.inner_tag().0, message) })
+            })
+        })
+    }
+}
+
+/// Output voice.
+#[derive(Debug)]
+pub struct OutVoice {
+    tag: voice::Tag,
+    params_ptr: AtomicPtr<voice::Params>,
+    inner_tag: voice::Tag,
+}
+
+impl OutVoice {
+    fn new(tag: voice::Tag, params_ptr: AtomicPtr<voice::Params>, inner_tag: voice::Tag) -> Self {
+        Self {
+            tag,
+            params_ptr,
+            inner_tag,
+        }
+    }
+
+    /// Get voice parameters.
+    pub fn params(&mut self) -> voice::Params {
+        let boxed_params = unsafe { Box::from_raw(*self.params_ptr.get_mut()) };
+        let params = boxed_params.clone();
+        self.params_ptr = AtomicPtr::new(Box::into_raw(boxed_params));
+        *params
+    }
+
+    /// Get inner tag.
+    pub fn inner_tag(&self) -> voice::Tag {
+        self.inner_tag
+    }
+}
+
+impl Voice for OutVoice {
+    fn tag(&self) -> voice::Tag {
+        self.tag
+    }
+}
+
+extern "C" {
+    fn host_trig_out_voice(
+        host: *mut c_void,
+        params: *mut voice::Params,
+        index: i32,
+        tag: intptr_t,
+    ) -> intptr_t;
+    fn host_release_out_voice(host: *mut c_void, tag: intptr_t);
+    fn host_kill_out_voice(host: *mut c_void, tag: intptr_t);
+    fn host_on_out_voice_event(host: *mut c_void, tag: intptr_t, message: ffi::Message)
+        -> intptr_t;
 }
 
 /// Message from the host to the plugin
@@ -189,7 +336,7 @@ pub enum HostMessage<'a> {
 
 impl From<ffi::Message> for HostMessage<'_> {
     fn from(message: ffi::Message) -> Self {
-        debug!("HostMessage::from {:?}", message);
+        trace!("HostMessage::from {:?}", message);
 
         let result = match message.id {
             0 => HostMessage::from_show_editor(message),
@@ -229,7 +376,7 @@ impl From<ffi::Message> for HostMessage<'_> {
             _ => HostMessage::Unknown,
         };
 
-        debug!("HostMessage::{:?}", result);
+        trace!("HostMessage::{:?}", result);
 
         result
     }
@@ -302,7 +449,7 @@ pub enum GetName {
 
 impl From<ffi::Message> for GetName {
     fn from(message: ffi::Message) -> Self {
-        debug!("GetName::from {:?}", message);
+        trace!("GetName::from {:?}", message);
 
         let result = match message.id {
             0 => GetName::Param(message.index as usize),
@@ -316,7 +463,7 @@ impl From<ffi::Message> for GetName {
             _ => GetName::Unknown,
         };
 
-        debug!("GetName::{:?}", result);
+        trace!("GetName::{:?}", result);
 
         result
     }
@@ -359,7 +506,7 @@ pub enum Event {
 
 impl From<ffi::Message> for Event {
     fn from(message: ffi::Message) -> Self {
-        debug!("Event::from {:?}", message);
+        trace!("Event::from {:?}", message);
 
         let result = match message.id {
             0 => Event::Tempo(f32::from_raw_ptr(message.index), message.value as u32),
@@ -370,7 +517,7 @@ impl From<ffi::Message> for Event {
             _ => Event::Unknown,
         };
 
-        debug!("Event::{:?}", result);
+        trace!("Event::{:?}", result);
 
         result
     }

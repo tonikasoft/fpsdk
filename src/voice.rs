@@ -3,7 +3,7 @@
 use std::os::raw::c_void;
 
 use crate::plugin::PluginAdapter;
-use crate::{ffi, intptr_t, AsRawPtr};
+use crate::{ffi, intptr_t, AsRawPtr, ValuePtr};
 
 crate::implement_tag!();
 
@@ -40,7 +40,7 @@ pub trait Voice: Send + Sync {
 /// levels are also available for, for example, note layering. In any case the initial levels are
 /// made to be checked once the voice is triggered, while the other ones are to be checked every
 /// time.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[repr(C)]
 pub struct Params {
     /// Made to be checked once the voice is triggered.
@@ -54,7 +54,7 @@ pub struct Params {
 /// [`Params`](struct.Params.html).
 ///
 /// **All of these parameters can go outside their defined range!**
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[repr(C)]
 pub struct LevelParams {
     /// Panning (-1..1).
@@ -74,33 +74,6 @@ pub struct LevelParams {
 pub enum Event {
     /// Monophonic mode can retrigger releasing voices.
     Retrigger,
-    /// Unknown event.
-    Unknown,
-}
-
-impl From<ffi::Message> for Event {
-    fn from(message: ffi::Message) -> Self {
-        match message.id {
-            0 => Event::Retrigger,
-            _ => Event::Unknown,
-        }
-    }
-}
-
-/// Additional methods used by [`VoiceHandler`](trait.VoiceHandler.html) in VFX plugins for the
-/// output voices.
-pub trait OutVoiceHandler: Send + Sync {
-    /// Called when the voice has to be discarded.
-    fn kill(&mut self, tag: Tag);
-    /// Process a voice event.
-    fn on_event(&mut self, _tag: Tag, _event: OutEvent) -> Box<dyn AsRawPtr> {
-        Box::new(0)
-    }
-}
-
-/// Output voice events.
-#[derive(Debug)]
-pub enum OutEvent {
     /// Retrieve the note length in ticks. The result is not reliable.
     ///
     /// Function result holds the length of the note, or -1 if it's not defined.
@@ -114,17 +87,17 @@ pub enum OutEvent {
     /// [`Params.init_levels.vol`](struct.Params.html). This should be called from `trigger`
     /// method.
     ///
-    /// Function result holds the velocity (0.0..1.0).
+    /// Function result holds the `f32` velocity (0.0..1.0).
     GetVelocity,
     /// (FL 7.0) Retrieve release velocity (0.0..1.0) in result. Use this if some release velocity
     /// mapping is involved. This should be called from `release` method.
     ///
-    /// Function result holds the velocity (0.0..1.0) (to be called from `release` method).
+    /// Function result holds the `f32` velocity (0.0..1.0) (to be called from `release` method).
     GetRelVelocity,
     /// (FL 7.0) Retrieve release time multiplicator. Use this for direct release multiplicator.
     /// This should be called from `release` method.
     ///
-    /// Function result holds the value (0.0..2.0).
+    /// Function result holds the `f32` value (0.0..2.0).
     GetRelTime,
     /// (FL 7.0) Call this to set if velocity is linked to volume or not. The default is on.
     SetLinkVelocity(bool),
@@ -132,17 +105,84 @@ pub enum OutEvent {
     Unknown,
 }
 
-impl From<ffi::Message> for OutEvent {
+impl From<ffi::Message> for Event {
     fn from(message: ffi::Message) -> Self {
         match message.id {
-            1 => OutEvent::GetLength,
-            2 => OutEvent::GetColor,
-            3 => OutEvent::GetVelocity,
-            4 => OutEvent::GetRelVelocity,
-            5 => OutEvent::GetRelTime,
-            6 => OutEvent::SetLinkVelocity(message.index != 0),
-            _ => OutEvent::Unknown,
+            0 => Event::Retrigger,
+            1 => Event::GetLength,
+            2 => Event::GetColor,
+            3 => Event::GetVelocity,
+            4 => Event::GetRelVelocity,
+            5 => Event::GetRelTime,
+            6 => Event::SetLinkVelocity(message.index != 0),
+            _ => Event::Unknown,
         }
+    }
+}
+
+impl From<Event> for Option<ffi::Message> {
+    fn from(event: Event) -> Self {
+        match event {
+            Event::Retrigger => Some(ffi::Message {
+                id: 0,
+                index: 0,
+                value: 0,
+            }),
+            Event::GetLength => Some(ffi::Message {
+                id: 1,
+                index: 0,
+                value: 0,
+            }),
+            Event::GetColor => Some(ffi::Message {
+                id: 2,
+                index: 0,
+                value: 0,
+            }),
+            Event::GetVelocity => Some(ffi::Message {
+                id: 3,
+                index: 0,
+                value: 0,
+            }),
+            Event::GetRelVelocity => Some(ffi::Message {
+                id: 4,
+                index: 0,
+                value: 0,
+            }),
+            Event::GetRelTime => Some(ffi::Message {
+                id: 5,
+                index: 0,
+                value: 0,
+            }),
+            Event::SetLinkVelocity(value) => Some(ffi::Message {
+                id: 6,
+                index: value as isize,
+                value: 0,
+            }),
+            Event::Unknown => None,
+        }
+    }
+}
+
+/// Additional methods used by [`VoiceHandler`](trait.VoiceHandler.html) in VFX plugins for the
+/// output voices.
+pub trait OutVoiceHandler: Send + Sync {
+    /// The host calls this to let it create a voice.
+    ///
+    /// - `tag` is an identifier the host uses to identify the voice.
+    /// - `index` is voice output index in patcher.
+    ///
+    fn trigger(&mut self, _params: Params, _index: usize, _tag: Tag) -> Option<&mut dyn Voice> {
+        None
+    }
+    /// This gets called by the host when the voice enters the envelope release state (note off).
+    fn release(&mut self, _tag: Tag) {}
+    /// Called when the voice has to be discarded.
+    fn kill(&mut self, tag: Tag);
+    /// Process a voice event.
+    ///
+    /// See [`Event`](enum.Event.html) for result variants.
+    fn on_event(&mut self, _tag: Tag, _event: Event) -> Option<ValuePtr> {
+        None
     }
 }
 
@@ -158,7 +198,7 @@ impl From<ffi::Message> for OutEvent {
 pub unsafe extern "C" fn voice_handler_trigger(
     adapter: *mut PluginAdapter,
     params: Params,
-    tag: i32,
+    tag: intptr_t,
 ) -> intptr_t {
     let handler = (*adapter).0.voice_handler();
     let voice_ptr: *mut &mut dyn Voice = Box::leak(Box::new(handler.trigger(params, Tag(tag))));
@@ -210,14 +250,10 @@ pub unsafe extern "C" fn voice_handler_kill(
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn out_voice_handler_kill(
-    adapter: *mut PluginAdapter,
-    voice: *mut &mut dyn Voice,
-) {
-    let r_voice = Box::from_raw(voice);
+pub unsafe extern "C" fn out_voice_handler_kill(adapter: *mut PluginAdapter, tag: intptr_t) {
     let handler = (*adapter).0.voice_handler();
     if let Some(out_handler) = handler.out_handler() {
-        out_handler.kill(r_voice.tag());
+        out_handler.kill(Tag(tag));
     }
 }
 
@@ -253,14 +289,13 @@ pub unsafe extern "C" fn voice_handler_on_event(
 #[no_mangle]
 pub unsafe extern "C" fn out_voice_handler_on_event(
     adapter: *mut PluginAdapter,
-    voice: *mut &mut dyn Voice,
+    tag: intptr_t,
     message: ffi::Message,
 ) -> intptr_t {
     let handler = (*adapter).0.voice_handler();
-    match handler.out_handler() {
-        Some(out_handler) => out_handler
-            .on_event((*voice).tag(), message.into())
-            .as_raw_ptr(),
-        None => Box::new(0).as_raw_ptr(),
-    }
+    handler
+        .out_handler()
+        .and_then(|out_handler| out_handler.on_event(Tag(tag), message.into()))
+        .map(|result| result.0)
+        .unwrap_or(0)
 }

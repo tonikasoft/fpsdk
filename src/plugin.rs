@@ -26,22 +26,24 @@ macro_rules! create_plugin {
         extern "C" {
             fn create_plug_instance_c(
                 host: *mut c_void,
-                tag: i32,
+                tag: $crate::intptr_t,
                 adapter: *mut c_void,
             ) -> *mut c_void;
         }
 
         #[allow(non_snake_case)]
         #[no_mangle]
-        pub unsafe extern "C" fn CreatePlugInstance(host: *mut c_void, tag: i32) -> *mut c_void {
-            let ho = $crate::host::Host { version: 0 };
-            let plugin = <$pl as $crate::plugin::Plugin>::new(ho, $crate::plugin::Tag(tag));
+        pub unsafe extern "C" fn CreatePlugInstance(
+            host: *mut c_void,
+            tag: $crate::intptr_t,
+        ) -> *mut c_void {
+            let ho = $crate::host::Host::new(host);
+            let plugin = <$pl as $crate::plugin::Plugin>::new(
+                ho,
+                $crate::plugin::Tag(tag as $crate::intptr_t),
+            );
             let adapter = $crate::plugin::PluginAdapter(Box::new(plugin));
-            create_plug_instance_c(
-                host,
-                tag,
-                Box::into_raw(Box::new(adapter)) as *mut c_void,
-            )
+            create_plug_instance_c(host, tag, Box::into_raw(Box::new(adapter)) as *mut c_void)
         }
     };
 }
