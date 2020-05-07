@@ -126,7 +126,9 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe + Send + Sync + 'static {
     /// Get [`VoiceHandler`](../voice/trait.VoiceHandler.html).
     ///
     /// Implement this method if you make a generator plugin.
-    fn voice_handler(&mut self) -> &mut dyn VoiceHandler;
+    fn voice_handler(&mut self) -> Option<&mut dyn VoiceHandler> {
+        None
+    }
     /// The host will call this when there's new MIDI data available. This function is only called
     /// when the plugin has called the
     /// [`host::Host::on_message`](../host/struct.Host.html#method.on_message) with

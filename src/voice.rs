@@ -200,9 +200,15 @@ pub unsafe extern "C" fn voice_handler_trigger(
     params: Params,
     tag: intptr_t,
 ) -> intptr_t {
-    let handler = (*adapter).0.voice_handler();
-    let voice_ptr: *mut &mut dyn Voice = Box::leak(Box::new(handler.trigger(params, Tag(tag))));
-    voice_ptr as *mut c_void as intptr_t
+    (*adapter)
+        .0
+        .voice_handler()
+        .map(|handler| {
+            let voice_ptr: *mut &mut dyn Voice =
+                Box::leak(Box::new(handler.trigger(params, Tag(tag))));
+            voice_ptr as *mut c_void as intptr_t
+        })
+        .unwrap_or(-1)
 }
 
 /// [`VoiceHandler::release`](trait.VoiceHandler.html#tymethod.release) FFI.
@@ -221,7 +227,9 @@ pub unsafe extern "C" fn voice_handler_release(
     // We don't call Box::from_raw because:
     // 1. Host calls this then voice_handler_kill — this way we'll get double deallocation
     // 2. Given FL SDK documentation, we shouldn't deallocate voices here
-    (*adapter).0.voice_handler().release((*voice).tag());
+    if let Some(handler) = (*adapter).0.voice_handler() {
+        handler.release((*voice).tag())
+    }
 }
 
 /// [`VoiceHandler::kill`](trait.VoiceHandler.html#tymethod.kill) FFI.
@@ -238,7 +246,9 @@ pub unsafe extern "C" fn voice_handler_kill(
     voice: *mut &mut dyn Voice,
 ) {
     let r_voice = Box::from_raw(voice);
-    (*adapter).0.voice_handler().kill(r_voice.tag());
+    if let Some(handler) = (*adapter).0.voice_handler() {
+        handler.kill(r_voice.tag())
+    }
 }
 
 /// [`VoiceHandler::kill_out`](trait.VoiceHandler.html#tymethod.kill_out) FFI.
@@ -251,10 +261,11 @@ pub unsafe extern "C" fn voice_handler_kill(
 #[doc(hidden)]
 #[no_mangle]
 pub unsafe extern "C" fn out_voice_handler_kill(adapter: *mut PluginAdapter, tag: intptr_t) {
-    let handler = (*adapter).0.voice_handler();
-    if let Some(out_handler) = handler.out_handler() {
-        out_handler.kill(Tag(tag));
-    }
+    (*adapter).0.voice_handler().and_then(|handler| {
+        handler.out_handler().map(|out_handler| {
+            out_handler.kill(Tag(tag));
+        })
+    });
 }
 
 /// [`VoiceHandler::on_event`](trait.VoiceHandler.html#tymethod.on_event) FFI.
@@ -274,8 +285,12 @@ pub unsafe extern "C" fn voice_handler_on_event(
     (*adapter)
         .0
         .voice_handler()
-        .on_event((*voice).tag(), message.into())
-        .as_raw_ptr()
+        .map(|handler| {
+            handler
+                .on_event((*voice).tag(), message.into())
+                .as_raw_ptr()
+        })
+        .unwrap_or(-1)
 }
 
 /// [`OutVoiceHandler::on_event`](trait.OutVoiceHandler.html#method.on_event) FFI.
@@ -292,10 +307,11 @@ pub unsafe extern "C" fn out_voice_handler_on_event(
     tag: intptr_t,
     message: ffi::Message,
 ) -> intptr_t {
-    let handler = (*adapter).0.voice_handler();
-    handler
-        .out_handler()
+    (*adapter)
+        .0
+        .voice_handler()
+        .and_then(|handler| handler.out_handler())
         .and_then(|out_handler| out_handler.on_event(Tag(tag), message.into()))
         .map(|result| result.0)
-        .unwrap_or(0)
+        .unwrap_or(-1)
 }

@@ -26,6 +26,7 @@ pub const IO_FILLED: i32 = 1;
 /// Plugin host.
 #[derive(Debug)]
 pub struct Host {
+    voicer: Arc<Mutex<Voicer>>,
     out_voicer: Arc<Mutex<OutVoicer>>,
     host_ptr: AtomicPtr<c_void>,
 }
@@ -33,8 +34,10 @@ pub struct Host {
 impl Host {
     /// Initializer.
     pub fn new(host_ptr: *mut c_void) -> Self {
+        let voicer = Arc::new(Mutex::new(Voicer::new(AtomicPtr::new(host_ptr))));
         let out_voicer = Arc::new(Mutex::new(OutVoicer::new(AtomicPtr::new(host_ptr))));
         Self {
+            voicer,
             out_voicer,
             host_ptr: AtomicPtr::new(host_ptr),
         }
@@ -46,10 +49,56 @@ impl Host {
         todo!()
     }
 
+    /// Get [`Voicer`](struct.Voicer.html)
+    pub fn voice_handler(&self) -> Arc<Mutex<Voicer>> {
+        Arc::clone(&self.voicer)
+    }
+
     /// Get [`OutVoicer`](struct.OutVoicer.html).
     pub fn out_voice_handler(&self) -> Arc<Mutex<OutVoicer>> {
         Arc::clone(&self.out_voicer)
     }
+}
+
+/// Use this to manually release, kill and notify voices about events.
+#[derive(Debug)]
+pub struct Voicer {
+    host_ptr: AtomicPtr<c_void>,
+}
+
+impl Voicer {
+    fn new(host_ptr: AtomicPtr<c_void>) -> Self {
+        Self { host_ptr }
+    }
+}
+
+impl OutVoiceHandler for Voicer {
+    /// Tell the host the specified voice should be silent (Note Off).
+    fn release(&mut self, tag: voice::Tag) {
+        trace!("manully release voice {}", tag);
+        unsafe { host_release_voice(*self.host_ptr.get_mut(), tag.0) };
+    }
+
+    /// Tell the host that the specified voice can be killed (freed from memory).
+    ///
+    /// This method forces FL Studio to ask the plugin to destroy its voice.
+    fn kill(&mut self, tag: voice::Tag) {
+        trace!("manully kill voice {}", tag);
+        unsafe { host_kill_voice(*self.host_ptr.get_mut(), tag.0) };
+    }
+
+    /// Tell the host that some event has happened concerning the specified voice.
+    fn on_event(&mut self, tag: voice::Tag, event: voice::Event) -> Option<ValuePtr> {
+        Option::<ffi::Message>::from(event).map(|value| {
+            ValuePtr(unsafe { host_on_voice_event(*self.host_ptr.get_mut(), tag.0, value) })
+        })
+    }
+}
+
+extern "C" {
+    fn host_release_voice(host: *mut c_void, tag: intptr_t);
+    fn host_kill_voice(host: *mut c_void, tag: intptr_t);
+    fn host_on_voice_event(host: *mut c_void, tag: intptr_t, message: ffi::Message) -> intptr_t;
 }
 
 /// Use this for operations with output voices (i.e. for VFX inside [patcher](

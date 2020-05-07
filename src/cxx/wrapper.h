@@ -36,38 +36,38 @@ struct Params {
 
 class PluginWrapper : public TFruityPlug {
   public:
-    PluginWrapper(TFruityPlugHost *Host, int Tag, PluginAdapter *adapter,
+    PluginWrapper(TFruityPlugHost *host, int tag, PluginAdapter *adapter,
                   PFruityPlugInfo info);
     virtual ~PluginWrapper();
 
     // from TFruityPlug
-    virtual intptr_t _stdcall Dispatcher(intptr_t ID, intptr_t Index,
-                                         intptr_t Value);
+    virtual intptr_t _stdcall Dispatcher(intptr_t id, intptr_t index,
+                                         intptr_t value);
     virtual void _stdcall Idle_Public();
-    virtual void _stdcall SaveRestoreState(IStream *Stream, BOOL Save);
-    virtual void _stdcall GetName(int Section, int Index, int Value,
-                                  char *Name);
-    virtual int _stdcall ProcessEvent(int EventID, int EventValue, int Flags);
-    virtual int _stdcall ProcessParam(int Index, int Value, int RECFlags);
-    virtual void _stdcall Eff_Render(PWAV32FS SourceBuffer, PWAV32FS DestBuffer,
-                                     int Length);
-    virtual void _stdcall Gen_Render(PWAV32FS DestBuffer, int &Length);
-    virtual TVoiceHandle _stdcall TriggerVoice(PVoiceParams VoiceParams,
-                                               intptr_t SetTag);
-    virtual void _stdcall Voice_Release(TVoiceHandle Handle);
-    virtual void _stdcall Voice_Kill(TVoiceHandle Handle);
-    virtual int _stdcall Voice_ProcessEvent(TVoiceHandle Handle, int EventID,
-                                            int EventValue, int Flags);
-    virtual int _stdcall Voice_Render(TVoiceHandle Handle, PWAV32FS DestBuffer,
-                                      int &Length);
+    virtual void _stdcall SaveRestoreState(IStream *stream, BOOL save);
+    virtual void _stdcall GetName(int section, int index, int value,
+                                  char *name);
+    virtual int _stdcall ProcessEvent(int event_id, int event_value, int flags);
+    virtual int _stdcall ProcessParam(int index, int value, int rec_flags);
+    virtual void _stdcall Eff_Render(PWAV32FS source_buffer,
+                                     PWAV32FS dest_buffer, int length);
+    virtual void _stdcall Gen_Render(PWAV32FS dest_buffer, int &length);
+    virtual TVoiceHandle _stdcall TriggerVoice(PVoiceParams voice_params,
+                                               intptr_t set_tag);
+    virtual void _stdcall Voice_Release(TVoiceHandle handle);
+    virtual void _stdcall Voice_Kill(TVoiceHandle handle);
+    virtual int _stdcall Voice_ProcessEvent(TVoiceHandle handle, int event_id,
+                                            int event_value, int flags);
+    virtual int _stdcall Voice_Render(TVoiceHandle handle, PWAV32FS dest_buffer,
+                                      int &length);
     virtual void _stdcall NewTick();
     virtual void _stdcall MIDITick();
-    virtual void _stdcall MIDIIn(int &Msg);
-    virtual void _stdcall MsgIn(intptr_t Msg);
-    virtual int _stdcall OutputVoice_ProcessEvent(TOutVoiceHandle Handle,
-                                                  int EventID, int EventValue,
-                                                  int Flags);
-    virtual void _stdcall OutputVoice_Kill(TVoiceHandle Handle);
+    virtual void _stdcall MIDIIn(int &msg);
+    virtual void _stdcall MsgIn(intptr_t msg);
+    virtual int _stdcall OutputVoice_ProcessEvent(TOutVoiceHandle handle,
+                                                  int event_id, int event_value,
+                                                  int flags);
+    virtual void _stdcall OutputVoice_Kill(TVoiceHandle handle);
 
   protected:
     TFruityPlugHost *host;
@@ -114,6 +114,10 @@ extern "C" int32_t istream_read(void *istream, uint8_t *data, uint32_t size,
 extern "C" int32_t istream_write(void *istream, const uint8_t *data,
                                  uint32_t size, uint32_t *write);
 // Host
+extern "C" void host_release_voice(void *host, intptr_t tag);
+extern "C" void host_kill_voice(void *host, intptr_t tag);
+extern "C" intptr_t host_on_voice_event(void *host, intptr_t tag,
+                                        Message message);
 extern "C" intptr_t host_trig_out_voice(void *host, Params *params,
                                         int32_t index, intptr_t tag);
 extern "C" void host_release_out_voice(void *host, intptr_t tag);

@@ -13,7 +13,7 @@ use simple_logging;
 #[cfg(unix)]
 use simplelog::{ConfigBuilder, WriteLogger};
 
-use fpsdk::host::{Event, GetName, Host, HostMessage, OutVoicer};
+use fpsdk::host::{Event, GetName, Host, HostMessage, OutVoicer, Voicer};
 use fpsdk::plugin::{self, Info, InfoBuilder, Plugin, StateReader, StateWriter};
 use fpsdk::voice::{self, OutVoiceHandler, Voice, VoiceHandler};
 use fpsdk::{create_plugin, AsRawPtr, MidiMessage, ProcessParamFlags, ValuePtr};
@@ -44,7 +44,7 @@ impl Plugin for Simple {
         info!("init plugin with tag {}", tag);
 
         Self {
-            voice_handler: SimpleVoiceHandler::new(host.out_voice_handler()),
+            voice_handler: SimpleVoiceHandler::new(host.voice_handler(), host.out_voice_handler()),
             host,
             tag,
             param_names: vec![
@@ -154,8 +154,8 @@ impl Plugin for Simple {
         }
     }
 
-    fn voice_handler(&mut self) -> &mut dyn VoiceHandler {
-        &mut self.voice_handler
+    fn voice_handler(&mut self) -> Option<&mut dyn VoiceHandler> {
+        Some(&mut self.voice_handler)
     }
 }
 
@@ -163,15 +163,33 @@ impl Plugin for Simple {
 struct SimpleVoiceHandler {
     voices: HashMap<voice::Tag, SimpleVoice>,
     out_handler: SimpleOutVoiceHandler,
+    send_handler: Arc<Mutex<Voicer>>,
     send_out_handler: Arc<Mutex<OutVoicer>>,
 }
 
 impl SimpleVoiceHandler {
-    fn new(send_out_handler: Arc<Mutex<OutVoicer>>) -> Self {
+    fn new(send_handler: Arc<Mutex<Voicer>>, send_out_handler: Arc<Mutex<OutVoicer>>) -> Self {
         Self {
             voices: HashMap::new(),
             out_handler: SimpleOutVoiceHandler::default(),
+            send_handler,
             send_out_handler,
+        }
+    }
+}
+
+impl SimpleVoiceHandler {
+    fn log_velocity(&self, tag: voice::Tag) {
+        let mut send_handler = self.send_handler.lock().unwrap();
+        if let Some(velocity) = send_handler.on_event(tag, voice::Event::GetVelocity) {
+            trace!("get velocity {} for voice {}", velocity.get::<f32>(), tag);
+        }
+    }
+
+    fn log_color(&self, tag: voice::Tag) {
+        let mut send_handler = self.send_handler.lock().unwrap();
+        if let Some(color) = send_handler.on_event(tag, voice::Event::GetColor) {
+            trace!("get color {} for voice {}", color.get::<u8>(), tag);
         }
     }
 }
@@ -181,17 +199,22 @@ impl VoiceHandler for SimpleVoiceHandler {
         let voice = SimpleVoice::new(params.clone(), tag);
         trace!("trigger voice {:?}", voice);
         self.voices.insert(tag, voice);
-        let voice_ref = self.voices.get_mut(&tag).unwrap();
-        let mut handler = self.send_out_handler.lock().unwrap();
 
-        handler.trigger(params, 0, tag);
+        let mut send_out_handler = self.send_out_handler.lock().unwrap();
 
-        voice_ref
+        send_out_handler.trigger(params, 0, tag);
+
+        self.log_velocity(tag);
+        self.log_color(tag);
+
+        self.voices.get_mut(&tag).unwrap()
     }
 
     fn release(&mut self, tag: voice::Tag) {
         trace!("release voice {:?}", self.voices.get(&tag));
         self.send_out_handler.lock().unwrap().release(tag);
+        trace!("send kill voice {}", tag);
+        self.send_handler.lock().unwrap().kill(tag);
     }
 
     fn kill(&mut self, tag: voice::Tag) {

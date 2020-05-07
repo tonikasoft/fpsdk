@@ -38,10 +38,16 @@ int32_t istream_write(void *istream, const uint8_t *data, uint32_t size,
 void *create_plug_instance_c(void *host, intptr_t tag, void *adapter) {
     Info *info = plugin_info((PluginAdapter *)adapter);
 
-    PFruityPlugInfo c_info = new TFruityPlugInfo{
-        (int)info->sdk_version,   info->long_name,          info->short_name,
-        (int)info->flags,         (int)info->num_params,    (int)info->def_poly,
-        (int)info->num_out_ctrls, (int)info->num_out_voices};
+    int reserved[30] = {0};
+    PFruityPlugInfo c_info = new TFruityPlugInfo{(int)info->sdk_version,
+                                                 info->long_name,
+                                                 info->short_name,
+                                                 (int)info->flags,
+                                                 (int)info->num_params,
+                                                 (int)info->def_poly,
+                                                 (int)info->num_out_ctrls,
+                                                 (int)info->num_out_voices,
+                                                 {*reserved}};
 
     free_rbox_raw(info);
 
@@ -56,12 +62,12 @@ void *create_plug_instance_c(void *host, intptr_t tag, void *adapter) {
     return wrapper;
 }
 
-PluginWrapper::PluginWrapper(TFruityPlugHost *Host, int Tag,
+PluginWrapper::PluginWrapper(TFruityPlugHost *host_ptr, int tag,
                              PluginAdapter *adap, PFruityPlugInfo info) {
     Info = info;
-    HostTag = Tag;
+    HostTag = tag;
     EditorHandle = 0;
-    host = Host;
+    host = host_ptr;
     adapter = adap;
 }
 
@@ -72,45 +78,45 @@ PluginWrapper::~PluginWrapper() {
     free_rbox_raw(adapter);
 }
 
-void _stdcall PluginWrapper::SaveRestoreState(IStream *Stream, BOOL Save) {
-    if (Save) {
-        plugin_save_state(adapter, Stream);
+void _stdcall PluginWrapper::SaveRestoreState(IStream *stream, BOOL save) {
+    if (save) {
+        plugin_save_state(adapter, stream);
     } else {
-        plugin_load_state(adapter, Stream);
+        plugin_load_state(adapter, stream);
     }
 }
 
-intptr_t _stdcall PluginWrapper::Dispatcher(intptr_t ID, intptr_t Index,
-                                            intptr_t Value) {
+intptr_t _stdcall PluginWrapper::Dispatcher(intptr_t id, intptr_t index,
+                                            intptr_t value) {
 
     // if (ID == FPD_SetEnabled) {
     // host->Dispatcher(HostTag, FHD_WantMIDIInput, 0, Value);
     // }
 
-    Message message = {ID, Index, Value};
+    Message message = {id, index, value};
 
     return plugin_dispatcher(adapter, message);
 }
 
-void _stdcall PluginWrapper::GetName(int Section, int Index, int Value,
-                                     char *Name) {
+void _stdcall PluginWrapper::GetName(int section, int index, int value,
+                                     char *name) {
     Message message = {
-        (intptr_t)Section,
-        (intptr_t)Index,
-        (intptr_t)Value,
+        (intptr_t)section,
+        (intptr_t)index,
+        (intptr_t)value,
     };
 
-    char *name = plugin_name_of(adapter, message);
-    strcpy(Name, name);
-    free_rstring(name);
+    char *name_of = plugin_name_of(adapter, message);
+    strcpy(name, name_of);
+    free_rstring(name_of);
 }
 
-int _stdcall PluginWrapper::ProcessEvent(int EventID, int EventValue,
-                                         int Flags) {
+int _stdcall PluginWrapper::ProcessEvent(int event_id, int event_value,
+                                         int flags) {
     Message message = {
-        (intptr_t)EventID,
-        (intptr_t)EventValue,
-        (intptr_t)Flags,
+        (intptr_t)event_id,
+        (intptr_t)event_value,
+        (intptr_t)flags,
     };
 
     plugin_process_event(adapter, message);
@@ -118,11 +124,11 @@ int _stdcall PluginWrapper::ProcessEvent(int EventID, int EventValue,
     return 0;
 }
 
-int _stdcall PluginWrapper::ProcessParam(int Index, int Value, int RECFlags) {
+int _stdcall PluginWrapper::ProcessParam(int index, int value, int rec_flags) {
     Message message = {
-        (intptr_t)Index,
-        (intptr_t)Value,
-        (intptr_t)RECFlags,
+        (intptr_t)index,
+        (intptr_t)value,
+        (intptr_t)rec_flags,
     };
 
     return plugin_process_param(adapter, message);
@@ -130,27 +136,27 @@ int _stdcall PluginWrapper::ProcessParam(int Index, int Value, int RECFlags) {
 
 void _stdcall PluginWrapper::Idle_Public() { plugin_idle(adapter); }
 
-void _stdcall PluginWrapper::Eff_Render(PWAV32FS SourceBuffer,
-                                        PWAV32FS DestBuffer, int Length) {
-    plugin_eff_render(adapter, *SourceBuffer, *DestBuffer, Length);
+void _stdcall PluginWrapper::Eff_Render(PWAV32FS source_buffer,
+                                        PWAV32FS dest_buffer, int length) {
+    plugin_eff_render(adapter, *source_buffer, *dest_buffer, length);
 }
 
-void _stdcall PluginWrapper::Gen_Render(PWAV32FS DestBuffer, int &Length) {
-    plugin_gen_render(adapter, *DestBuffer, Length);
+void _stdcall PluginWrapper::Gen_Render(PWAV32FS dest_buffer, int &length) {
+    plugin_gen_render(adapter, *dest_buffer, length);
 }
 
-TVoiceHandle _stdcall PluginWrapper::TriggerVoice(PVoiceParams VoiceParams,
-                                                  intptr_t SetTag) {
+TVoiceHandle _stdcall PluginWrapper::TriggerVoice(PVoiceParams voice_params,
+                                                  intptr_t set_tag) {
     LevelParams init_levels = {
-        VoiceParams->InitLevels.Pan,   VoiceParams->InitLevels.Vol,
-        VoiceParams->InitLevels.Pitch, VoiceParams->InitLevels.FCut,
-        VoiceParams->InitLevels.FRes,
+        voice_params->InitLevels.Pan,   voice_params->InitLevels.Vol,
+        voice_params->InitLevels.Pitch, voice_params->InitLevels.FCut,
+        voice_params->InitLevels.FRes,
     };
 
     LevelParams final_levels = {
-        VoiceParams->FinalLevels.Pan,   VoiceParams->FinalLevels.Vol,
-        VoiceParams->FinalLevels.Pitch, VoiceParams->FinalLevels.FCut,
-        VoiceParams->FinalLevels.FRes,
+        voice_params->FinalLevels.Pan,   voice_params->FinalLevels.Vol,
+        voice_params->FinalLevels.Pitch, voice_params->FinalLevels.FCut,
+        voice_params->FinalLevels.FRes,
     };
 
     Params params = {
@@ -158,26 +164,27 @@ TVoiceHandle _stdcall PluginWrapper::TriggerVoice(PVoiceParams VoiceParams,
         final_levels,
     };
 
-    return (TVoiceHandle)voice_handler_trigger(adapter, params, SetTag);
+    return (TVoiceHandle)voice_handler_trigger(adapter, params, set_tag);
 }
 
-void _stdcall PluginWrapper::Voice_Release(TVoiceHandle Handle) {
-    voice_handler_release(adapter, (void *)Handle);
+void _stdcall PluginWrapper::Voice_Release(TVoiceHandle handle) {
+    voice_handler_release(adapter, (void *)handle);
 }
 
-void _stdcall PluginWrapper::Voice_Kill(TVoiceHandle Handle) {
-    voice_handler_kill(adapter, (void *)Handle);
+void _stdcall PluginWrapper::Voice_Kill(TVoiceHandle handle) {
+    voice_handler_kill(adapter, (void *)handle);
 }
 
-int _stdcall PluginWrapper::Voice_ProcessEvent(TVoiceHandle Handle, int EventID,
-                                               int EventValue, int Flags) {
+int _stdcall PluginWrapper::Voice_ProcessEvent(TVoiceHandle handle,
+                                               int event_id, int event_value,
+                                               int flags) {
     Message message = {
-        (intptr_t)EventID,
-        (intptr_t)EventValue,
-        (intptr_t)Flags,
+        (intptr_t)event_id,
+        (intptr_t)event_value,
+        (intptr_t)flags,
     };
 
-    return voice_handler_on_event(adapter, (void *)Handle, message);
+    return voice_handler_on_event(adapter, (void *)handle, message);
 }
 
 int _stdcall PluginWrapper::Voice_Render(TVoiceHandle, PWAV32FS, int &) {
@@ -190,33 +197,47 @@ void _stdcall PluginWrapper::NewTick() { plugin_tick(adapter); }
 
 void _stdcall PluginWrapper::MIDITick() { plugin_midi_tick(adapter); }
 
-void _stdcall PluginWrapper::MIDIIn(int &Msg) {
+void _stdcall PluginWrapper::MIDIIn(int &msg) {
     MidiMessage message = {
-        (uint8_t)(Msg & 0xff),
-        (uint8_t)((Msg >> 8) & 0xff),
-        (uint8_t)((Msg >> 16) & 0xff),
-        (int)((Msg >> 24) & 0xff),
+        (uint8_t)(msg & 0xff),
+        (uint8_t)((msg >> 8) & 0xff),
+        (uint8_t)((msg >> 16) & 0xff),
+        (int)((msg >> 24) & 0xff),
     };
     plugin_midi_in(adapter, message);
 }
 
-void _stdcall PluginWrapper::MsgIn(intptr_t Msg) {}
+void _stdcall PluginWrapper::MsgIn(intptr_t msg) {}
 
-int _stdcall PluginWrapper::OutputVoice_ProcessEvent(TOutVoiceHandle Handle,
-                                                     int EventID,
-                                                     int EventValue,
-                                                     int Flags) {
+int _stdcall PluginWrapper::OutputVoice_ProcessEvent(TOutVoiceHandle handle,
+                                                     int event_id,
+                                                     int event_value,
+                                                     int flags) {
     Message message = {
-        (intptr_t)EventID,
-        (intptr_t)EventValue,
-        (intptr_t)Flags,
+        (intptr_t)event_id,
+        (intptr_t)event_value,
+        (intptr_t)flags,
     };
 
-    return out_voice_handler_on_event(adapter, Handle, message);
+    return out_voice_handler_on_event(adapter, handle, message);
 }
 
-void _stdcall PluginWrapper::OutputVoice_Kill(TVoiceHandle Handle) {
-    out_voice_handler_kill(adapter, Handle);
+void _stdcall PluginWrapper::OutputVoice_Kill(TVoiceHandle handle) {
+    out_voice_handler_kill(adapter, handle);
+}
+
+void host_release_voice(void *host, intptr_t tag) {
+    ((TFruityPlugHost *)host)->Voice_Release(tag);
+}
+
+void host_kill_voice(void *host, intptr_t tag) {
+    ((TFruityPlugHost *)host)->Voice_Kill(tag, true);
+}
+
+intptr_t host_on_voice_event(void *host, intptr_t tag, Message message) {
+    return ((TFruityPlugHost *)host)
+        ->Voice_ProcessEvent((TOutVoiceHandle)tag, message.id, message.index,
+                             message.value);
 }
 
 intptr_t host_trig_out_voice(void *host, Params *params, int32_t index,
@@ -226,8 +247,7 @@ intptr_t host_trig_out_voice(void *host, Params *params, int32_t index,
 }
 
 void host_release_out_voice(void *host, intptr_t tag) {
-    ((TFruityPlugHost *)host)
-        ->OutputVoice_Release((TOutVoiceHandle)tag);
+    ((TFruityPlugHost *)host)->OutputVoice_Release((TOutVoiceHandle)tag);
 }
 
 void host_kill_out_voice(void *host, intptr_t tag) {
