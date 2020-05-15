@@ -6,10 +6,11 @@ use std::sync::{Arc, Mutex};
 
 use log::trace;
 
-use crate::voice::{self, OutVoiceHandler, Voice};
+use crate::plugin::{self, message};
+use crate::voice::{self, SendVoiceHandler, Voice};
 use crate::{
-    ffi, intptr_t, FromRawPtr, MidiMessage, ProcessModeFlags, TimeSignature, Transport, ValuePtr,
-    WAVETABLE_SIZE,
+    ffi, intptr_t, AsRawPtr, FromRawPtr, MidiMessage, ProcessModeFlags, TimeSignature, Transport,
+    ValuePtr, WAVETABLE_SIZE,
 };
 
 /// [`Host::in_buf`](struct.Host.html#method.in_buf) flag, which is added before adding to the
@@ -28,7 +29,7 @@ pub const IO_FILLED: i32 = 1;
 pub struct Host {
     voicer: Arc<Mutex<Voicer>>,
     out_voicer: Arc<Mutex<OutVoicer>>,
-    host_ptr: AtomicPtr<c_void>,
+    pub(crate) host_ptr: AtomicPtr<c_void>,
 }
 
 impl Host {
@@ -47,6 +48,26 @@ impl Host {
     /// would be 1.2.3 for example, `version` would be 1002003
     pub fn version(&self) -> i32 {
         todo!()
+    }
+
+    // pub fn on_message(&mut self, tag: plugin::Tag, message: plugin::Message<'_>) -> ValuePtr {
+    // match message {
+    // plugin::Message::TicksToTime(_) => {
+    // let ffi_message = ffi::Message::from(message);
+    // unsafe { host_on_message(*self.host_ptr.get_mut(), tag.0, ffi_message.clone()) };
+    // ValuePtr(ffi_message.index)
+    // }
+    // _ => ValuePtr(unsafe {
+    // host_on_message(*self.host_ptr.get_mut(), tag.0, message.into())
+    // }),
+    // }
+    // }
+
+    /// Send message to host.
+    ///
+    /// See [`plugin::message`](../plugin/message/index.html).
+    pub fn on_message<T: message::Message>(&mut self, tag: plugin::Tag, message: T) -> T::Return {
+        message.send(tag, self)
     }
 
     /// Get [`Voicer`](struct.Voicer.html)
@@ -72,7 +93,7 @@ impl Voicer {
     }
 }
 
-impl OutVoiceHandler for Voicer {
+impl SendVoiceHandler for Voicer {
     /// Tell the host the specified voice should be silent (Note Off).
     fn release(&mut self, tag: voice::Tag) {
         trace!("manully release voice {}", tag);
@@ -118,7 +139,7 @@ impl OutVoicer {
     }
 }
 
-impl OutVoiceHandler for OutVoicer {
+impl SendVoiceHandler for OutVoicer {
     /// It returns `None` if the output has no destination.
     fn trigger(
         &mut self,
@@ -224,7 +245,7 @@ extern "C" {
 
 /// Message from the host to the plugin
 #[derive(Debug)]
-pub enum HostMessage<'a> {
+pub enum Message<'a> {
     /// Contains the handle of the parent window if the editor has to be shown.
     ShowEditor(Option<*mut c_void>),
     /// Change the processing mode flags. This can be ignored.
@@ -383,72 +404,69 @@ pub enum HostMessage<'a> {
     Unknown,
 }
 
-impl From<ffi::Message> for HostMessage<'_> {
+impl From<ffi::Message> for Message<'_> {
     fn from(message: ffi::Message) -> Self {
-        trace!("HostMessage::from {:?}", message);
+        trace!("host::Message::from {:?}", message);
 
         let result = match message.id {
-            0 => HostMessage::from_show_editor(message),
-            1 => HostMessage::from_process_mode(message),
-            2 => HostMessage::Flush,
-            3 => HostMessage::SetBlockSize(message.value as u32),
-            4 => HostMessage::SetSampleRate(message.value as u32),
-            5 => HostMessage::WindowMinMax(
-                message.index as *mut c_void,
-                message.value as *mut c_void,
-            ),
-            6 => HostMessage::KillVoice,
-            7 => HostMessage::UseVoiceLevels(message.index as u8),
-            9 => HostMessage::SetPreset(message.index as u64),
-            10 => HostMessage::from_chan_sample_changed(message),
-            11 => HostMessage::SetEnabled(message.value != 0),
-            12 => HostMessage::SetPlaying(message.value != 0),
-            13 => HostMessage::SongPosChanged,
-            14 => HostMessage::SetTimeSig(ffi::time_sig_from_raw(message.value)),
-            15 => HostMessage::CollectFile(message.index as usize),
-            16 => HostMessage::SetInternalParam,
-            17 => HostMessage::SetNumSends(message.value as u64),
-            18 => HostMessage::LoadFile(String::from_raw_ptr(message.value)),
-            19 => HostMessage::SetFitTime(f32::from_bits(message.value as i32 as u32)),
-            20 => HostMessage::SetSamplesPerTick(f32::from_bits(message.value as i32 as u32)),
-            21 => HostMessage::SetIdleTime(message.value as u64),
-            22 => HostMessage::SetFocus(message.value != 0),
-            23 => HostMessage::Transport(message.into()),
-            24 => HostMessage::MidiIn((message.value as u64).into()),
-            25 => HostMessage::RoutingChanged,
-            26 => HostMessage::GetParamInfo(message.index as usize),
-            27 => HostMessage::ProjLoaded,
-            28 => HostMessage::WrapperLoadState,
-            29 => HostMessage::ShowSettings(message.value != 0),
-            30 => HostMessage::SetIoLatency(message.index as u32, message.value as u32),
-            32 => HostMessage::PreferredNumIo(message.index as u8),
-            _ => HostMessage::Unknown,
+            0 => Message::from_show_editor(message),
+            1 => Message::from_process_mode(message),
+            2 => Message::Flush,
+            3 => Message::SetBlockSize(message.value as u32),
+            4 => Message::SetSampleRate(message.value as u32),
+            5 => Message::WindowMinMax(message.index as *mut c_void, message.value as *mut c_void),
+            6 => Message::KillVoice,
+            7 => Message::UseVoiceLevels(message.index as u8),
+            9 => Message::SetPreset(message.index as u64),
+            10 => Message::from_chan_sample_changed(message),
+            11 => Message::SetEnabled(message.value != 0),
+            12 => Message::SetPlaying(message.value != 0),
+            13 => Message::SongPosChanged,
+            14 => Message::SetTimeSig(ffi::time_sig_from_raw(message.value)),
+            15 => Message::CollectFile(message.index as usize),
+            16 => Message::SetInternalParam,
+            17 => Message::SetNumSends(message.value as u64),
+            18 => Message::LoadFile(String::from_raw_ptr(message.value)),
+            19 => Message::SetFitTime(f32::from_bits(message.value as i32 as u32)),
+            20 => Message::SetSamplesPerTick(f32::from_bits(message.value as i32 as u32)),
+            21 => Message::SetIdleTime(message.value as u64),
+            22 => Message::SetFocus(message.value != 0),
+            23 => Message::Transport(message.into()),
+            24 => Message::MidiIn((message.value as u64).into()),
+            25 => Message::RoutingChanged,
+            26 => Message::GetParamInfo(message.index as usize),
+            27 => Message::ProjLoaded,
+            28 => Message::WrapperLoadState,
+            29 => Message::ShowSettings(message.value != 0),
+            30 => Message::SetIoLatency(message.index as u32, message.value as u32),
+            32 => Message::PreferredNumIo(message.index as u8),
+            _ => Message::Unknown,
         };
 
-        trace!("HostMessage::{:?}", result);
+        trace!("host::Message::{:?}", result);
 
         result
     }
 }
 
-impl HostMessage<'_> {
+impl Message<'_> {
     fn from_show_editor(message: ffi::Message) -> Self {
         if message.value == 1 {
-            HostMessage::ShowEditor(None)
+            Message::ShowEditor(None)
         } else {
-            HostMessage::ShowEditor(Some(message.value as *mut c_void))
+            Message::ShowEditor(Some(message.value as *mut c_void))
         }
     }
 
     fn from_process_mode(message: ffi::Message) -> Self {
         let flags = ProcessModeFlags::from_bits_truncate(message.value);
-        HostMessage::ProcessMode(flags)
+        Message::ProcessMode(flags)
     }
 
     fn from_chan_sample_changed(message: ffi::Message) -> Self {
         let slice =
             unsafe { std::slice::from_raw_parts_mut(message.value as *mut f32, WAVETABLE_SIZE) };
-        HostMessage::ChanSampleChanged(slice)
+        Message::ChanSampleChanged(slice)
     }
 }
 
@@ -463,17 +481,19 @@ pub enum GetName {
     Param(usize),
     /// Retrieve the text representation of the value of a parameter for use in the event editor.
     ///
-    /// Value specifies parameter index.
-    Semitone(usize),
+    /// The first value specifies parameter index.
+    ///
+    /// The second value specifies value.
+    ParamValue(usize, isize),
     /// Retrieve the name of a note in piano roll.
     ///
     /// The first value specifies note index.
     ///
     /// The second one specifies the color (or MIDI channel).
-    ParamValue(u8, u8),
+    Semitone(u8, u8),
     /// (not used yet) Retrieve the name of a patch.
     ///
-    /// Value specifies patch index.
+    /// The value specifies patch index.
     Patch(usize),
     /// (optional) Retrieve the name of a per-voice parameter, specified by the value.
     ///
@@ -486,12 +506,20 @@ pub enum GetName {
     /// presets (see
     /// [`PluginMessage::SetNumPresets`](../plugin/enum.PluginMessage.html#variant.SetNumPresets)).
     ///
-    /// Value specifies preset index.
+    /// The value specifies preset index.
     Preset(usize),
     /// For plugins that output controllers, retrieve the name of output controller.
     ///
-    /// Value specifies controller index.
+    /// The value specifies controller index.
     OutCtrl(usize),
+    /// Retrieve name of per-voice color (MIDI channel).
+    ///
+    /// The value specifies the color.
+    VoiceColor(u8),
+    /// For plugins that output voices, retrieve the name of output voice.
+    ///
+    /// The value specifies voice index.
+    OutVoice(usize),
     /// Message ID is unknown
     Unknown,
 }
@@ -502,19 +530,79 @@ impl From<ffi::Message> for GetName {
 
         let result = match message.id {
             0 => GetName::Param(message.index as usize),
-            1 => GetName::Semitone(message.index as usize),
-            2 => GetName::ParamValue(message.index as u8, message.value as u8),
+            1 => GetName::ParamValue(message.index as usize, message.value),
+            2 => GetName::Semitone(message.index as u8, message.value as u8),
             3 => GetName::Patch(message.index as usize),
             4 => GetName::VoiceLevel(message.index as usize),
             5 => GetName::VoiceLevelHint(message.index as usize),
             6 => GetName::Preset(message.index as usize),
             7 => GetName::OutCtrl(message.index as usize),
+            8 => GetName::VoiceColor(message.index as u8),
+            9 => GetName::OutVoice(message.index as usize),
             _ => GetName::Unknown,
         };
 
         trace!("GetName::{:?}", result);
 
         result
+    }
+}
+
+impl From<GetName> for Option<ffi::Message> {
+    fn from(value: GetName) -> Self {
+        match value {
+            GetName::Param(index) => Some(ffi::Message {
+                id: 0,
+                index: index.as_raw_ptr(),
+                value: 0,
+            }),
+            GetName::ParamValue(index, value) => Some(ffi::Message {
+                id: 1,
+                index: index.as_raw_ptr(),
+                value,
+            }),
+            GetName::Semitone(index, value) => Some(ffi::Message {
+                id: 2,
+                index: index.as_raw_ptr(),
+                value: value.as_raw_ptr(),
+            }),
+            GetName::Patch(index) => Some(ffi::Message {
+                id: 3,
+                index: index.as_raw_ptr(),
+                value: 0,
+            }),
+            GetName::VoiceLevel(index) => Some(ffi::Message {
+                id: 4,
+                index: index.as_raw_ptr(),
+                value: 0,
+            }),
+            GetName::VoiceLevelHint(index) => Some(ffi::Message {
+                id: 5,
+                index: index.as_raw_ptr(),
+                value: 0,
+            }),
+            GetName::Preset(index) => Some(ffi::Message {
+                id: 6,
+                index: index.as_raw_ptr(),
+                value: 0,
+            }),
+            GetName::OutCtrl(index) => Some(ffi::Message {
+                id: 7,
+                index: index.as_raw_ptr(),
+                value: 0,
+            }),
+            GetName::VoiceColor(index) => Some(ffi::Message {
+                id: 8,
+                index: index.as_raw_ptr(),
+                value: 0,
+            }),
+            GetName::OutVoice(index) => Some(ffi::Message {
+                id: 9,
+                index: index.as_raw_ptr(),
+                value: 0,
+            }),
+            GetName::Unknown => None,
+        }
     }
 }
 

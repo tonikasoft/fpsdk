@@ -98,7 +98,8 @@ pub mod voice;
 
 use std::ffi::{CStr, CString};
 use std::fmt;
-use std::os::raw::{c_char, c_void};
+use std::mem;
+use std::os::raw::{c_char, c_int, c_void};
 
 use bitflags::bitflags;
 use log::{debug, error};
@@ -370,16 +371,6 @@ bitflags! {
 }
 
 bitflags! {
-    /// Parameter popup menu item flags
-    pub struct ParamMenuItemFlags: isize {
-        /// The item is disabled
-        const DISABLED = 1;
-        /// The item is checked
-        const CHECKED = 2;
-    }
-}
-
-bitflags! {
     /// Sample loading flags
     pub struct SampleLoadFlags: isize {
         ///This tells the sample loader to show an open box, for the user to select a sample
@@ -395,16 +386,6 @@ bitflags! {
         const GET_NAME = 4;
         /// Don't resample to the host sample rate
         const NO_RESAMPLING = 5;
-    }
-}
-
-bitflags! {
-    /// Notes parameters flags
-    pub struct NotesParamsFlags: isize {
-        /// Delete everything currently on the piano roll before adding the notes
-        const EMPTY_FIRST = 1;
-        /// Put the new notes in the piano roll selection, if there is one
-        const USE_SELECTION = 2;
     }
 }
 
@@ -590,6 +571,412 @@ pub struct Hold(pub bool);
 #[derive(Debug)]
 pub struct Jog(pub i64);
 
+/// Song time in **bar:step:tick** format.
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Default)]
+#[repr(C)]
+pub struct SongTime {
+    pub bar: i32,
+    pub step: i32,
+    pub tick: i32,
+}
+
+impl FromRawPtr for SongTime {
+    fn from_raw_ptr(value: intptr_t) -> Self {
+        unsafe { *Box::from_raw(value as *mut c_void as *mut Self) }
+    }
+}
+
+/// Collection of notes, which you can add to the piano roll using
+/// [`Host::on_message`](host/struct.Host.html#on_message.new) with message
+/// [`plugin::Message::AddToPianoRoll`](../plugin/enum.Message.html#variant.AddToPianoRoll).
+#[derive(Debug)]
+pub struct Notes {
+    // 0=step seq (not supported yet), 1=piano roll
+    //target: i32,
+    /// Notes.
+    pub notes: Vec<Note>,
+    /// See [`NotesFlags`](struct.NotesFlags.html).
+    pub flags: NotesFlags,
+    /// Pattern number. `None` for current.
+    pub pattern: Option<u32>,
+    /// Channel number. `None` for plugin's channel, or selected channel if plugin is an effect.
+    pub channel: Option<u32>,
+}
+
+/// This type represents a note in [`Notes`](struct.Notes.html).
+#[derive(Debug)]
+#[repr(C)]
+pub struct Note {
+    /// Position in PPQ.
+    pub position: i32,
+    /// Length in PPQ.
+    pub length: i32,
+    /// Pan in range -100..100.
+    pub pan: i32,
+    /// Volume.
+    pub vol: i32,
+    /// Note number.
+    pub note: i16,
+    /// Color or MIDI channel in range of 0..15.
+    pub color: i16,
+    /// Fine pitch in range -1200..1200.
+    pub pitch: i32,
+    /// Mod X or filter cutoff frequency.
+    pub mod_x: f32,
+    /// Mod Y or filter resonance (Q).
+    pub mod_y: f32,
+}
+
+bitflags! {
+    /// Notes parameters flags
+    pub struct NotesFlags: isize {
+        /// Delete everything currently on the piano roll before adding the notes.
+        const EMPTY_FIRST = 1;
+        /// Put the new notes in the piano roll selection, if there is one.
+        const USE_SELECTION = 2;
+    }
+}
+
+// This type in FL SDK is what we represent as Notes. Here we use it for FFI, to send it to C++.
+#[repr(C)]
+struct TNotesParams {
+    target: c_int,
+    flags: c_int,
+    pat_num: c_int,
+    chan_num: c_int,
+    count: c_int,
+    notes: *mut Note,
+}
+
+impl From<Notes> for TNotesParams {
+    fn from(mut notes: Notes) -> Self {
+        notes.notes.shrink_to_fit();
+        let notes_ptr = notes.notes.as_mut_ptr();
+        let len = notes.notes.len();
+        mem::forget(notes.notes);
+
+        Self {
+            target: 1,
+            flags: notes.flags.bits() as c_int,
+            pat_num: notes.pattern.map(|v| v as c_int).unwrap_or(-1),
+            chan_num: notes.channel.map(|v| v as c_int).unwrap_or(-1),
+            count: len as c_int,
+            notes: notes_ptr,
+        }
+    }
+}
+
+/// Describes an item that should be added to a control's right-click popup menu.
+#[derive(Debug)]
+pub struct ParamMenuEntry {
+    /// Name.
+    pub name: String,
+    /// Flags.
+    pub flags: ParamMenuItemFlags,
+}
+
+bitflags! {
+    /// Parameter popup menu item flags
+    pub struct ParamMenuItemFlags: i32 {
+        /// The item is disabled
+        const DISABLED = 1;
+        /// The item is checked
+        const CHECKED = 2;
+    }
+}
+
+impl ParamMenuEntry {
+    fn from_ffi(ffi_t: *mut TParamMenuEntry) -> Self {
+        Self {
+            name: unsafe { CString::from_raw((*ffi_t).name) }
+                .to_string_lossy()
+                .to_string(),
+            flags: ParamMenuItemFlags::from_bits(unsafe { (*ffi_t).flags })
+                .unwrap_or_else(ParamMenuItemFlags::empty),
+        }
+    }
+}
+
+#[derive(Debug)]
+#[repr(C)]
+struct TParamMenuEntry {
+    name: *mut c_char,
+    flags: c_int,
+}
+
+bitflags! {
+    /// Message box flags (see
+    /// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-messagebox).
+    pub struct MessageBoxFlags: isize {
+        // To indicate the buttons displayed in the message box, specify one of the following
+        // values.
+
+        /// The message box contains three push buttons: Abort, Retry, and Ignore.
+        const ABORTRETRYIGNORE = 0x0000_0002;
+        /// The message box contains three push buttons: Cancel, Try Again, Continue. Use this
+        /// message box type instead of ABORTRETRYIGNORE.
+        const CANCELTRYCONTINUE = 0x0000_0006;
+        /// Adds a Help button to the message box. When the user clicks the Help button or presses
+        /// F1, the system sends a WM_HELP message to the owner.
+        const HELP = 0x0000_4000;
+        /// The message box contains one push button: OK. This is the default.
+        const OK = 0x0000_0000;
+        /// The message box contains two push buttons: OK and Cancel.
+        const OKCANCEL = 0x0000_0001;
+        /// The message box contains two push buttons: Retry and Cancel.
+        const RETRYCANCEL = 0x0000_0005;
+        /// The message box contains two push buttons: Yes and No.
+        const YESNO = 0x0000_0004;
+        /// The message box contains three push buttons: Yes, No, and Cancel.
+        const YESNOCANCEL = 0x0000_0003;
+
+        // To display an icon in the message box, specify one of the following values.
+
+        /// An exclamation-point icon appears in the message box.
+        const ICONEXCLAMATION = 0x0000_0030;
+        /// An exclamation-point icon appears in the message box.
+        const ICONWARNING = 0x0000_0030;
+        /// An icon consisting of a lowercase letter i in a circle appears in the message box.
+        const ICONINFORMATION = 0x0000_0040;
+        /// An icon consisting of a lowercase letter i in a circle appears in the message box.
+        const ICONASTERISK = 0x0000_0040;
+        /// A question-mark icon appears in the message box. The question-mark message icon is no
+        /// longer recommended because it does not clearly represent a specific type of message and
+        /// because the phrasing of a message as a question could apply to any message type. In
+        /// addition, users can confuse the message symbol question mark with Help information.
+        /// Therefore, do not use this question mark message symbol in your message boxes. The
+        /// system continues to support its inclusion only for backward compatibility.
+        const ICONQUESTION = 0x0000_0020;
+        /// A stop-sign icon appears in the message box.
+        const ICONSTOP = 0x0000_0010;
+        /// A stop-sign icon appears in the message box.
+        const ICONERROR = 0x0000_0010;
+        /// A stop-sign icon appears in the message box.
+        const ICONHAND = 0x0000_0010;
+
+        // To indicate the default button, specify one of the following values.
+
+        /// The first button is the default button.
+        ///
+        /// DEFBUTTON1 is the default unless DEFBUTTON2, DEFBUTTON3, or DEFBUTTON4 is specified.
+        const DEFBUTTON1 = 0x0000_0000;
+
+        /// The second button is the default button.
+        const DEFBUTTON2 = 0x0000_0100;
+        /// The third button is the default button.
+        const DEFBUTTON3 = 0x0000_0200;
+        /// The fourth button is the default button.
+        const DEFBUTTON4 = 0x0000_0300;
+
+        // To indicate the modality of the dialog box, specify one of the following values.
+
+        /// The user must respond to the message box before continuing work in the window
+        /// identified by the hWnd parameter. However, the user can move to the windows of other
+        /// threads and work in those windows.
+        ///
+        /// Depending on the hierarchy of windows in the application, the user may be able to move
+        /// to other windows within the thread. All child windows of the parent of the message box
+        /// are automatically disabled, but pop-up windows are not.
+        ///
+        /// APPLMODAL is the default if neither SYSTEMMODAL nor TASKMODAL is specified.
+        const APPLMODAL = 0x0000_0000;
+
+
+        /// Same as APPLMODAL except that the message box has the WS_EX_TOPMOST style. Use
+        /// system-modal message boxes to notify the user of serious, potentially damaging errors
+        /// that require immediate attention (for example, running out of memory). This flag has no
+        /// effect on the user's ability to interact with windows other than those associated with
+        /// hWnd.
+        const SYSTEMMODAL = 0x0000_1000;
+        /// Same as APPLMODAL except that all the top-level windows belonging to the current thread
+        /// are disabled if the hWnd parameter is NULL. Use this flag when the calling application
+        /// or library does not have a window handle available but still needs to prevent input to
+        /// other windows in the calling thread without suspending other threads.
+        const TASKMODAL = 0x0000_2000;
+
+        // To specify other options, use one or more of the following values.
+
+        /// Same as desktop of the interactive window station. For more information, see Window
+        /// Stations.
+        ///
+        /// If the current input desktop is not the default desktop, MessageBox does not return
+        /// until the user switches to the default desktop.
+        const DEFAULT_DESKTOP_ONLY = 0x0002_0000;
+
+        /// The text is right-justified.
+        const RIGHT = 0x0008_0000;
+        /// Displays message and caption text using right-to-left reading order on Hebrew and
+        /// Arabic systems.
+        const RTLREADING = 0x0010_0000;
+        /// The message box becomes the foreground window. Internally, the system calls the
+        /// SetForegroundWindow function for the message box.
+        const SETFOREGROUND = 0x0001_0000;
+        /// The message box is created with the WS_EX_TOPMOST window style.
+        const TOPMOST = 0x0004_0000;
+        /// The caller is a service notifying the user of an event. The function displays a message
+        /// box on the current active desktop, even if there is no user logged on to the computer.
+        ///
+        /// Terminal Services: If the calling thread has an impersonation token, the function
+        /// directs the message box to the session specified in the impersonation token.
+        ///
+        /// If this flag is set, the hWnd parameter must be NULL. This is so that the message box
+        /// can appear on a desktop other than the desktop corresponding to the hWnd.
+        ///
+        /// For information on security considerations in regard to using this flag, see
+        /// Interactive Services. In particular, be aware that this flag can produce interactive
+        /// content on a locked desktop and should therefore be used for only a very limited set of
+        /// scenarios, such as resource exhaustion.
+        const SERVICE_NOTIFICATION = 0x0020_0000;
+    }
+}
+
+impl AsRawPtr for MessageBoxFlags {
+    fn as_raw_ptr(&self) -> intptr_t {
+        self.bits()
+    }
+}
+
+/// The result returned by a message box.
+///
+/// See
+/// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-messagebox#return-value
+/// for more info.
+#[derive(Debug)]
+pub enum MessageBoxResult {
+    /// The OK button was selected.
+    Ok,
+    /// The Cancel button was selected.
+    Cancel,
+    /// The Abort button was selected.
+    Abort,
+    /// The Retry button was selected.
+    Retry,
+    /// The Ignore button was selected.
+    Ignore,
+    /// The Yes button was selected.
+    Yes,
+    /// The No button was selected.
+    No,
+    /// The Try Again button was selected.
+    TryAgain,
+    /// The Continue button was selected.
+    Continue,
+    /// Unknown.
+    Unknown,
+}
+
+impl FromRawPtr for MessageBoxResult {
+    fn from_raw_ptr(value: intptr_t) -> Self {
+        match value {
+            1 => MessageBoxResult::Ok,
+            2 => MessageBoxResult::Cancel,
+            3 => MessageBoxResult::Abort,
+            4 => MessageBoxResult::Retry,
+            5 => MessageBoxResult::Ignore,
+            6 => MessageBoxResult::Yes,
+            7 => MessageBoxResult::No,
+            10 => MessageBoxResult::TryAgain,
+            11 => MessageBoxResult::Continue,
+            _ => MessageBoxResult::Unknown,
+        }
+    }
+}
+
+/// Time format.
+#[derive(Debug)]
+pub enum TimeFormat {
+    /// Beats.
+    Beats,
+    /// Absolute ms.
+    AbsoluteMs,
+    /// Running ms.
+    RunningMs,
+    /// Time since sound card restart (in ms).
+    RestartMs,
+}
+
+impl From<TimeFormat> for u8 {
+    fn from(format: TimeFormat) -> Self {
+        match format {
+            TimeFormat::Beats => 0,
+            TimeFormat::AbsoluteMs => 1,
+            TimeFormat::RunningMs => 2,
+            TimeFormat::RestartMs => 3,
+        }
+    }
+}
+
+/// Time
+///
+/// The first value is mixing time.
+///
+/// The second value is offset in samples.
+#[derive(Debug, Default)]
+#[repr(C)]
+pub struct Time(pub f64, pub f64);
+
+impl FromRawPtr for Time {
+    fn from_raw_ptr(value: intptr_t) -> Self {
+        unsafe { *Box::from_raw(value as *mut c_void as *mut Time) }
+    }
+}
+
+/// Name of the color (or MIDI channel) in Piano Roll.
+#[derive(Debug)]
+pub struct NameColor {
+    /// User-defined name (can be empty).
+    pub name: String,
+    /// Visible name (can be guessed).
+    pub vis_name: String,
+    /// Color/MIDI channel index.
+    pub color: u8,
+    /// Real index of the item (can be used to translate plugin's own in/out into real mixer track
+    /// number).
+    pub index: usize,
+}
+
+/// Type used in FFI for [`NameColor`](struct.NameColor.html).
+#[repr(C)]
+pub struct TNameColor {
+    name: [u8; 256],
+    vis_name: [u8; 256],
+    color: c_int,
+    index: c_int,
+}
+
+impl FromRawPtr for TNameColor {
+    fn from_raw_ptr(value: intptr_t) -> Self {
+        unsafe { *Box::from_raw(value as *mut Self) }
+    }
+}
+
+impl From<TNameColor> for NameColor {
+    fn from(name_color: TNameColor) -> Self {
+        Self {
+            name: String::from_utf8_lossy(&name_color.name[..]).to_string(),
+            vis_name: String::from_utf8_lossy(&name_color.vis_name[..]).to_string(),
+            color: name_color.color as u8,
+            index: name_color.index as usize,
+        }
+    }
+}
+
+impl From<NameColor> for TNameColor {
+    fn from(name_color: NameColor) -> Self {
+        let mut name = [0_u8; 256];
+        name.copy_from_slice(name_color.name.as_bytes());
+        let mut vis_name = [0_u8; 256];
+        vis_name.copy_from_slice(name_color.vis_name.as_bytes());
+        Self {
+            name,
+            vis_name,
+            color: name_color.color as c_int,
+            index: name_color.index as c_int,
+        }
+    }
+}
+
 impl From<u64> for MidiMessage {
     fn from(value: u64) -> Self {
         MidiMessage {
@@ -631,6 +1018,3 @@ impl fmt::Debug for ffi::Message {
             .finish()
     }
 }
-
-#[cfg(test)]
-mod tests {}

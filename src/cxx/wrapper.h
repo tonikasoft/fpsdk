@@ -36,7 +36,7 @@ struct Params {
 
 class PluginWrapper : public TFruityPlug {
   public:
-    PluginWrapper(TFruityPlugHost *host, int tag, PluginAdapter *adapter,
+    PluginWrapper(TFruityPlugHost *host, TPluginTag tag, PluginAdapter *adapter,
                   PFruityPlugInfo info);
     virtual ~PluginWrapper();
 
@@ -100,14 +100,14 @@ extern "C" void plugin_load_state(PluginAdapter *adapter, IStream *istream);
 extern "C" void plugin_loop_in(PluginAdapter *adapter, intptr_t message);
 
 // Voice handler
-extern "C" intptr_t voice_handler_trigger(PluginAdapter *adpater, Params params,
+extern "C" intptr_t voice_handler_trigger(PluginAdapter *adapter, Params params,
                                           intptr_t tag);
-extern "C" void voice_handler_release(PluginAdapter *adpater, void *voice);
-extern "C" void voice_handler_kill(PluginAdapter *adpater, void *voice);
-extern "C" intptr_t voice_handler_on_event(PluginAdapter *adpater, void *voice,
+extern "C" void voice_handler_release(PluginAdapter *adapter, void *voice);
+extern "C" void voice_handler_kill(PluginAdapter *adapter, void *voice);
+extern "C" intptr_t voice_handler_on_event(PluginAdapter *adapter, void *voice,
                                            Message message);
-extern "C" void out_voice_handler_kill(PluginAdapter *adpater, intptr_t tag);
-extern "C" intptr_t out_voice_handler_on_event(PluginAdapter *adpater,
+extern "C" void out_voice_handler_kill(PluginAdapter *adapter, intptr_t tag);
+extern "C" intptr_t out_voice_handler_on_event(PluginAdapter *adapter,
                                                intptr_t tag, Message message);
 // IStream
 extern "C" int32_t istream_read(void *istream, uint8_t *data, uint32_t size,
@@ -115,6 +115,8 @@ extern "C" int32_t istream_read(void *istream, uint8_t *data, uint32_t size,
 extern "C" int32_t istream_write(void *istream, const uint8_t *data,
                                  uint32_t size, uint32_t *write);
 // Host
+extern "C" intptr_t host_on_message(void *host, TPluginTag tag,
+                                    Message message);
 extern "C" void host_release_voice(void *host, intptr_t tag);
 extern "C" void host_kill_voice(void *host, intptr_t tag);
 extern "C" intptr_t host_on_voice_event(void *host, intptr_t tag,
@@ -127,6 +129,10 @@ extern "C" intptr_t host_on_out_voice_event(void *host, intptr_t tag,
                                             Message message);
 
 // Utility
+extern "C" intptr_t init_p_notes_params(int target, int flags, int ch_num,
+                                        int pat_num, TNoteParams *notes,
+                                        int len);
+
 extern "C" void free_rbox_raw(void *raw_ptr);
 extern "C" void free_rstring(char *raw_str);
 // FFI to make C string (`char *`) managed by C side. Because `char *` produced

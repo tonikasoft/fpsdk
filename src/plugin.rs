@@ -1,4 +1,7 @@
 //! Plugin related stuff.
+
+pub mod message;
+
 use std::ffi::CString;
 use std::io::{self, Read, Write};
 use std::os::raw::{c_char, c_void};
@@ -7,8 +10,8 @@ use std::panic::RefUnwindSafe;
 use hresult::HRESULT;
 use log::{debug, error};
 
-use crate::host::{Event, GetName, Host, HostMessage};
-use crate::voice::VoiceHandler;
+use crate::host::{self, Event, GetName, Host};
+use crate::voice::ReceiveVoiceHandler;
 use crate::{
     alloc_real_cstr, ffi, intptr_t, AsRawPtr, MidiMessage, ProcessParamFlags, ValuePtr,
     CURRENT_SDK_VERSION,
@@ -63,10 +66,10 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe + Send + Sync + 'static {
     /// The host calls this function to request something that isn't done in a specialized
     /// function.
     ///
-    /// See [`HostMessage`](../host/enum.HostMessage.html) for possible messages.
+    /// See [`host::Message`](../host/enum.Message.html) for possible messages.
     ///
     /// Can be called from GUI or mixer threads.
-    fn on_message(&mut self, message: HostMessage<'_>) -> Box<dyn AsRawPtr>;
+    fn on_message(&mut self, message: host::Message<'_>) -> Box<dyn AsRawPtr>;
     /// This is called when the host wants to know a text representation of some value.
     ///
     /// Can be called from GUI or mixer threads.
@@ -123,10 +126,10 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe + Send + Sync + 'static {
     ///
     /// Called from mixer thread.
     fn render(&mut self, _input: &[[f32; 2]], _output: &mut [[f32; 2]]) {}
-    /// Get [`VoiceHandler`](../voice/trait.VoiceHandler.html).
+    /// Get [`ReceiveVoiceHandler`](../voice/trait.ReceiveVoiceHandler.html).
     ///
     /// Implement this method if you make a generator plugin.
-    fn voice_handler(&mut self) -> Option<&mut dyn VoiceHandler> {
+    fn voice_handler(&mut self) -> Option<&mut dyn ReceiveVoiceHandler> {
         None
     }
     /// The host will call this when there's new MIDI data available. This function is only called
@@ -317,15 +320,15 @@ impl InfoBuilder {
     }
 
     /// This plugin as a generator will use the sample loaded in its parent channel (see
-    /// [`HostMessage::ChanSampleChanged`](
-    /// ../host/enum.HostMessage.html#variant.ChanSampleChanged)).
+    /// [`host::Message::ChanSampleChanged`](
+    /// ../host/enum.Message.html#variant.ChanSampleChanged)).
     pub fn get_chan_sample(mut self) -> Self {
         self.flags |= 1 << 19;
         self
     }
 
     /// Fit to time selector will appear in channel settings window (see
-    /// [`HostMessage::SetFitTime`](../host/enum.HostMessage.html#variant.SetFitTime)).
+    /// [`host::Message::SetFitTime`](../host/enum.Message.html#variant.SetFitTime)).
     pub fn want_fit_time(mut self) -> Self {
         self.flags |= 1 << 20;
         self
@@ -335,6 +338,18 @@ impl InfoBuilder {
     /// Pitch and Pan in [`VoiceParams`](struct.VoiceParams.html).
     fn new_voice_params(mut self) -> Self {
         self.flags |= 1 << 21;
+        self
+    }
+
+    /// Plugin can't be smart disabled.
+    pub fn cant_smart_disable(mut self) -> Self {
+        self.flags |= 1 << 23;
+        self
+    }
+
+    /// Plugin wants a settings button on the titlebar (mainly for the wrapper).
+    pub fn want_settings_button(mut self) -> Self {
+        self.flags |= 1 << 24;
         self
     }
 
@@ -630,6 +645,7 @@ pub unsafe extern "C" fn plugin_save_state(adapter: *mut PluginAdapter, stream: 
 pub unsafe extern "C" fn plugin_load_state(adapter: *mut PluginAdapter, stream: *mut c_void) {
     (*adapter).0.load_state(StateReader(stream));
 }
+
 
 /// [`Plugin::loop_in`](Plugin.html#method.loop_in) FFI.
 ///

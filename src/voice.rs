@@ -10,7 +10,7 @@ crate::implement_tag!();
 /// Implement this trait for your type if you make a generator plugin.
 ///
 /// All methods can be called either from GUI or mixer thread.
-pub trait VoiceHandler: Send + Sync {
+pub trait ReceiveVoiceHandler: Send + Sync {
     /// The host calls this to let it create a voice.
     ///
     /// The `tag` parameter is an identifier the host uses to identify the voice.
@@ -23,8 +23,8 @@ pub trait VoiceHandler: Send + Sync {
     fn on_event(&mut self, _tag: Tag, _event: Event) -> Box<dyn AsRawPtr> {
         Box::new(0)
     }
-    /// Getter for [`OutVoiceHandler`](trait.OutVoiceHandler.html).
-    fn out_handler(&mut self) -> Option<&mut dyn OutVoiceHandler> {
+    /// Getter for [`SendVoiceHandler`](trait.SendVoiceHandler.html).
+    fn out_handler(&mut self) -> Option<&mut dyn SendVoiceHandler> {
         None
     }
 }
@@ -163,9 +163,9 @@ impl From<Event> for Option<ffi::Message> {
     }
 }
 
-/// Additional methods used by [`VoiceHandler`](trait.VoiceHandler.html) in VFX plugins for the
-/// output voices.
-pub trait OutVoiceHandler: Send + Sync {
+/// Additional methods used by [`ReceiveVoiceHandler`](trait.ReceiveVoiceHandler.html) in VFX
+/// plugins for the output voices.
+pub trait SendVoiceHandler: Send + Sync {
     /// The host calls this to let it create a voice.
     ///
     /// - `tag` is an identifier the host uses to identify the voice.
@@ -186,7 +186,7 @@ pub trait OutVoiceHandler: Send + Sync {
     }
 }
 
-/// [`VoiceHandler::trigger`](trait.VoiceHandler.html#tymethod.trigger) FFI.
+/// [`ReceiveVoiceHandler::trigger`](trait.ReceiveVoiceHandler.html#tymethod.trigger) FFI.
 ///
 /// It supposed to be used internally. Don't use it.
 ///
@@ -211,7 +211,7 @@ pub unsafe extern "C" fn voice_handler_trigger(
         .unwrap_or(-1)
 }
 
-/// [`VoiceHandler::release`](trait.VoiceHandler.html#tymethod.release) FFI.
+/// [`ReceiveVoiceHandler::release`](trait.ReceiveVoiceHandler.html#tymethod.release) FFI.
 ///
 /// It supposed to be used internally. Don't use it.
 ///
@@ -232,7 +232,7 @@ pub unsafe extern "C" fn voice_handler_release(
     }
 }
 
-/// [`VoiceHandler::kill`](trait.VoiceHandler.html#tymethod.kill) FFI.
+/// [`ReceiveVoiceHandler::kill`](trait.ReceiveVoiceHandler.html#tymethod.kill) FFI.
 ///
 /// It supposed to be used internally. Don't use it.
 ///
@@ -251,7 +251,7 @@ pub unsafe extern "C" fn voice_handler_kill(
     }
 }
 
-/// [`VoiceHandler::kill_out`](trait.VoiceHandler.html#tymethod.kill_out) FFI.
+/// [`ReceiveVoiceHandler::kill_out`](trait.ReceiveVoiceHandler.html#tymethod.kill_out) FFI.
 ///
 /// It supposed to be used internally. Don't use it.
 ///
@@ -268,7 +268,7 @@ pub unsafe extern "C" fn out_voice_handler_kill(adapter: *mut PluginAdapter, tag
     });
 }
 
-/// [`VoiceHandler::on_event`](trait.VoiceHandler.html#tymethod.on_event) FFI.
+/// [`ReceiveVoiceHandler::on_event`](trait.ReceiveVoiceHandler.html#tymethod.on_event) FFI.
 ///
 /// It supposed to be used internally. Don't use it.
 ///
@@ -293,7 +293,7 @@ pub unsafe extern "C" fn voice_handler_on_event(
         .unwrap_or(-1)
 }
 
-/// [`OutVoiceHandler::on_event`](trait.OutVoiceHandler.html#method.on_event) FFI.
+/// [`SendVoiceHandler::on_event`](trait.SendVoiceHandler.html#method.on_event) FFI.
 ///
 /// It supposed to be used internally. Don't use it.
 ///

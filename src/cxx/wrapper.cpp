@@ -2,6 +2,21 @@
 #include "src/lib.rs.h"
 #include <cstring>
 
+intptr_t init_p_notes_params(int target, int flags, int ch_num, int pat_num,
+                             TNoteParams *notes, int len) {
+    TNotesParams *params = (TNotesParams *)malloc(sizeof(TNotesParams) +
+                                                  sizeof(TNoteParams) * len);
+    params->Target = target;
+    params->Flags = flags;
+    params->PatNum = pat_num;
+    params->ChanNum = ch_num;
+    params->Count = len;
+    params->NoteParams[0] = *notes;
+    memmove(params->NoteParams, notes, sizeof(TNoteParams) * len);
+
+    return (intptr_t)params;
+}
+
 TimeSignature time_sig_from_raw(intptr_t raw_time_sig) {
     PTimeSigInfo time_sig = (TTimeSigInfo *)raw_time_sig;
 
@@ -62,7 +77,7 @@ void *create_plug_instance_c(void *host, intptr_t tag, void *adapter) {
     return wrapper;
 }
 
-PluginWrapper::PluginWrapper(TFruityPlugHost *host_ptr, int tag,
+PluginWrapper::PluginWrapper(TFruityPlugHost *host_ptr, TPluginTag tag,
                              PluginAdapter *adap, PFruityPlugInfo info) {
     Info = info;
     HostTag = tag;
@@ -224,6 +239,12 @@ int _stdcall PluginWrapper::OutputVoice_ProcessEvent(TOutVoiceHandle handle,
 
 void _stdcall PluginWrapper::OutputVoice_Kill(TVoiceHandle handle) {
     out_voice_handler_kill(adapter, handle);
+}
+
+// host
+intptr_t host_on_message(void *host, TPluginTag tag, Message message) {
+    return ((TFruityPlugHost *)host)
+        ->Dispatcher(tag, message.id, message.index, message.value);
 }
 
 void host_release_voice(void *host, intptr_t tag) {

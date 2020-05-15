@@ -13,10 +13,14 @@ use simple_logging;
 #[cfg(unix)]
 use simplelog::{ConfigBuilder, WriteLogger};
 
-use fpsdk::host::{Event, GetName, Host, HostMessage, OutVoicer, Voicer};
+use fpsdk::host::{self, Event, GetName, Host, OutVoicer, Voicer};
+use fpsdk::plugin::message;
 use fpsdk::plugin::{self, Info, InfoBuilder, Plugin, StateReader, StateWriter};
-use fpsdk::voice::{self, OutVoiceHandler, Voice, VoiceHandler};
-use fpsdk::{create_plugin, AsRawPtr, MidiMessage, ProcessParamFlags, ValuePtr};
+use fpsdk::voice::{self, ReceiveVoiceHandler, SendVoiceHandler, Voice};
+use fpsdk::{
+    create_plugin, AsRawPtr, MessageBoxFlags, MidiMessage, Note, Notes, NotesFlags,
+    ProcessParamFlags, TimeFormat, ValuePtr,
+};
 
 static ONCE: Once = Once::new();
 const LOG_PATH: &str = "simple.log";
@@ -35,6 +39,79 @@ struct State {
     _time: u64,
     _param_1: f64,
     _param_2: i64,
+}
+
+impl Simple {
+    fn add_notes(&mut self) {
+        let notes = Notes {
+            notes: vec![
+                Note {
+                    position: 0,
+                    length: 384,
+                    pan: 0,
+                    vol: 100,
+                    note: 60,
+                    color: 0,
+                    pitch: 0,
+                    mod_x: 1.0,
+                    mod_y: 1.0,
+                },
+                Note {
+                    position: 384,
+                    length: 384,
+                    pan: 0,
+                    vol: 100,
+                    note: 62,
+                    color: 0,
+                    pitch: 0,
+                    mod_x: 1.0,
+                    mod_y: 1.0,
+                },
+                Note {
+                    position: 768,
+                    length: 384,
+                    pan: 0,
+                    vol: 100,
+                    note: 64,
+                    color: 0,
+                    pitch: 0,
+                    mod_x: 1.0,
+                    mod_y: 1.0,
+                },
+            ],
+            flags: NotesFlags::EMPTY_FIRST,
+            pattern: None,
+            channel: None,
+        };
+        self.host
+            .on_message(self.tag, message::AddToPianoRoll(notes));
+    }
+
+    fn show_annoying_message(&mut self) {
+        self.host.on_message(
+            self.tag,
+            message::MessageBox(
+                "Message".to_string(),
+                "This message is shown when plugin is enabled. \
+                Feel free to comment this out if it annoys you."
+                    .to_string(),
+                MessageBoxFlags::OK | MessageBoxFlags::ICONINFORMATION,
+            ),
+        );
+    }
+
+    fn log_selection(&mut self) {
+        let selection = self
+            .host
+            .on_message(self.tag, message::GetSelTime(TimeFormat::Beats));
+        self.host.on_message(
+            self.tag,
+            message::DebugLogMsg(format!(
+                "current selection or full song range is: {:?}",
+                selection
+            )),
+        );
+    }
 }
 
 impl Plugin for Simple {
@@ -97,8 +174,20 @@ impl Plugin for Simple {
             .unwrap_or_else(|e| error!("error reading value from state {}", e));
     }
 
-    fn on_message(&mut self, message: HostMessage) -> Box<dyn AsRawPtr> {
-        info!("{} got message from host: {:?}", self.tag, message);
+    fn on_message(&mut self, message: host::Message) -> Box<dyn AsRawPtr> {
+        self.host.on_message(
+            self.tag,
+            message::DebugLogMsg(format!("{} got message from host: {:?}", self.tag, message)),
+        );
+
+        if let host::Message::SetEnabled(enabled) = message {
+            self.add_notes();
+            self.log_selection();
+
+            if enabled {
+                self.show_annoying_message()
+            }
+        }
 
         Box::new(0)
     }
@@ -123,8 +212,8 @@ impl Plugin for Simple {
     fn idle(&mut self) {
         trace!("{} idle", self.tag);
     }
-    
-    /// method does not work
+
+    // looks like doesn't work
     fn loop_in(&mut self, message: ValuePtr) {
         trace!("{:?} loop_in", message);
     }
@@ -159,7 +248,7 @@ impl Plugin for Simple {
         }
     }
 
-    fn voice_handler(&mut self) -> Option<&mut dyn VoiceHandler> {
+    fn voice_handler(&mut self) -> Option<&mut dyn ReceiveVoiceHandler> {
         Some(&mut self.voice_handler)
     }
 }
@@ -199,7 +288,7 @@ impl SimpleVoiceHandler {
     }
 }
 
-impl VoiceHandler for SimpleVoiceHandler {
+impl ReceiveVoiceHandler for SimpleVoiceHandler {
     fn trigger(&mut self, params: voice::Params, tag: voice::Tag) -> &mut dyn Voice {
         let voice = SimpleVoice::new(params.clone(), tag);
         trace!("trigger voice {:?}", voice);
@@ -237,7 +326,7 @@ impl VoiceHandler for SimpleVoiceHandler {
         Box::new(0)
     }
 
-    fn out_handler(&mut self) -> Option<&mut dyn OutVoiceHandler> {
+    fn out_handler(&mut self) -> Option<&mut dyn SendVoiceHandler> {
         Some(&mut self.out_handler)
     }
 }
@@ -263,7 +352,7 @@ impl Voice for SimpleVoice {
 #[derive(Debug, Default)]
 struct SimpleOutVoiceHandler;
 
-impl OutVoiceHandler for SimpleOutVoiceHandler {
+impl SendVoiceHandler for SimpleOutVoiceHandler {
     fn kill(&mut self, tag: voice::Tag) {
         trace!("kill out voice with tag {}", tag);
     }
