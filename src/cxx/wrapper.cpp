@@ -89,8 +89,8 @@ void _stdcall PluginWrapper::SaveRestoreState(IStream *stream, BOOL save) {
 intptr_t _stdcall PluginWrapper::Dispatcher(intptr_t id, intptr_t index,
                                             intptr_t value) {
 
-    // if (ID == FPD_SetEnabled) {
-    // host->Dispatcher(HostTag, FHD_WantMIDIInput, 0, Value);
+    // if (id == FPD_SetEnabled) {
+    // host->Dispatcher(HostTag, FHD_WantMIDIInput, 0, value);
     // }
 
     Message message = {id, index, value};
@@ -207,7 +207,7 @@ void _stdcall PluginWrapper::MIDIIn(int &msg) {
     plugin_midi_in(adapter, message);
 }
 
-void _stdcall PluginWrapper::MsgIn(intptr_t msg) {}
+void _stdcall PluginWrapper::MsgIn(intptr_t msg) { plugin_loop_in(adapter, msg); }
 
 int _stdcall PluginWrapper::OutputVoice_ProcessEvent(TOutVoiceHandle handle,
                                                      int event_id,

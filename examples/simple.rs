@@ -123,6 +123,11 @@ impl Plugin for Simple {
     fn idle(&mut self) {
         trace!("{} idle", self.tag);
     }
+    
+    /// method does not work
+    fn loop_in(&mut self, message: ValuePtr) {
+        trace!("{:?} loop_in", message);
+    }
 
     fn process_param(
         &mut self,

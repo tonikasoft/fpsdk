@@ -97,6 +97,7 @@ extern "C" void plugin_gen_render(PluginAdapter *adapter, float dest[1][2],
 extern "C" void plugin_midi_in(PluginAdapter *adapter, MidiMessage message);
 extern "C" void plugin_save_state(PluginAdapter *adapter, IStream *istream);
 extern "C" void plugin_load_state(PluginAdapter *adapter, IStream *istream);
+extern "C" void plugin_loop_in(PluginAdapter *adapter, intptr_t message);
 
 // Voice handler
 extern "C" intptr_t voice_handler_trigger(PluginAdapter *adpater, Params params,
