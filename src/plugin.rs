@@ -251,7 +251,7 @@ impl InfoBuilder {
         self
     }
 
-    /// (not used yet) The plugin reacts to note events.
+    /// The plugin reacts to note events.
     pub fn get_note_input(mut self) -> Self {
         self.flags |= 1 << 4;
         self

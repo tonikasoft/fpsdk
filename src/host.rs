@@ -1,7 +1,7 @@
 //! Plugin's host (FL Studio).
 use std::collections::HashMap;
 use std::ffi::c_void;
-use std::os::raw::{c_char, c_int};
+use std::os::raw::{c_char, c_int, c_uchar};
 use std::sync::atomic::AtomicPtr;
 use std::sync::{Arc, Mutex};
 
@@ -109,6 +109,47 @@ impl Host {
         };
     }
 
+    /// Send a MIDI out message immediately.
+    ///
+    /// To be able to use this method, you should enable MIDI out for the plugin (see
+    /// [`InfoBuilder::midi_out`](../plugin/struct.InfoBuilder.html#method.midi_out)) and send
+    /// [`plugin::message::ActivateMidi`](../plugin/message/struct.ActivateMidi.html) to the host.
+    pub fn midi_out(&mut self, tag: plugin::Tag, message: MidiMessage) {
+        // We could use MidiMessage directly with Box::into_raw, but we can't because of the Rust
+        // memory layer. We couldn't free the allocated memory properly, because it's managed by
+        // the host. So we just send parameters and instantiate FL's TMIDIOutMsg on the C side.
+        //
+        // The same is inside midi_out_del.
+        unsafe {
+            host_midi_out(
+                *self.host_ptr.get_mut(),
+                tag.0,
+                message.status,
+                message.data1,
+                message.data2,
+                message.port,
+            )
+        };
+    }
+
+    /// Send a delayed MIDI out message. This message will actually be sent when the MIDI tick has
+    /// reached the current mixer tick.
+    ///
+    /// To be able to use this method, you should enable MIDI out for the plugin (see
+    /// [`InfoBuilder::midi_out`](../plugin/struct.InfoBuilder.html#method.midi_out)).
+    pub fn midi_out_del(&mut self, tag: plugin::Tag, message: MidiMessage) {
+        unsafe {
+            host_midi_out_del(
+                *self.host_ptr.get_mut(),
+                tag.0,
+                message.status,
+                message.data1,
+                message.data2,
+                message.port,
+            )
+        };
+    }
+
     /// Get [`Voicer`](struct.Voicer.html)
     pub fn voice_handler(&self) -> Arc<Mutex<Voicer>> {
         Arc::clone(&self.voicer)
@@ -123,6 +164,22 @@ impl Host {
 extern "C" {
     fn host_on_parameter(host: *mut c_void, tag: intptr_t, index: c_int, value: c_int);
     fn host_on_hint(host: *mut c_void, tag: intptr_t, text: *mut c_char);
+    fn host_midi_out(
+        host: *mut c_void,
+        tag: intptr_t,
+        status: c_uchar,
+        data1: c_uchar,
+        data2: c_uchar,
+        port: c_uchar,
+    );
+    fn host_midi_out_del(
+        host: *mut c_void,
+        tag: intptr_t,
+        status: c_uchar,
+        data1: c_uchar,
+        data2: c_uchar,
+        port: c_uchar,
+    );
 }
 
 /// Use this to manually release, kill and notify voices about events.

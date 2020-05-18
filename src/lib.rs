@@ -66,8 +66,7 @@ pub mod ffi {
         pub status: u8,
         pub data1: u8,
         pub data2: u8,
-        /// -1 if not applicable
-        pub port: i32,
+        pub port: u8,
     }
 
     #[derive(Clone)]
@@ -1000,7 +999,7 @@ impl From<u64> for MidiMessage {
             status: (value & 0xff) as u8,
             data1: ((value >> 8) & 0xff) as u8,
             data2: ((value >> 16) & 0xff) as u8,
-            port: -1,
+            port: 0,
         }
     }
 }

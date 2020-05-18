@@ -120,6 +120,12 @@ extern "C" intptr_t host_on_message(void *host, TPluginTag tag,
 extern "C" void host_on_parameter(void *host, TPluginTag tag, int index,
                                   int value);
 extern "C" void host_on_hint(void *host, TPluginTag tag, char *text);
+extern "C" void host_midi_out(void *host, TPluginTag tag, unsigned char status,
+                              unsigned char data1, unsigned char data2,
+                              unsigned char port);
+extern "C" void host_midi_out_del(void *host, TPluginTag tag, unsigned char
+        status, unsigned char data1, unsigned char data2, unsigned char port);
+
 extern "C" void host_release_voice(void *host, intptr_t tag);
 extern "C" void host_kill_voice(void *host, intptr_t tag);
 extern "C" intptr_t host_on_voice_event(void *host, intptr_t tag,
@@ -138,11 +144,12 @@ extern "C" intptr_t init_p_notes_params(int target, int flags, int ch_num,
 
 extern "C" void free_rbox_raw(void *raw_ptr);
 extern "C" void free_rstring(char *raw_str);
-// FFI to make C string (`char *`) managed by C side. Because `char *` produced
-// by `CString::into_raw` leads to memory leak. Here's what docs say about
-// `CString::into_raw`:
+// FFI to make C string (`char *`) managed by C side. Because `char *`
+// produced by `CString::into_raw` leads to memory leak. Here's what docs
+// say about `CString::into_raw`:
 //
 // The pointer which this function returns must be returned to Rust and
-// reconstituted using from_raw to be properly deallocated. Specifically, one
-// should not use the standard C free() function to deallocate this string.
+// reconstituted using from_raw to be properly deallocated. Specifically,
+// one should not use the standard C free() function to deallocate this
+// string.
 extern "C" char *alloc_real_cstr(char *rust_cstr);

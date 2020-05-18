@@ -124,8 +124,11 @@ impl Plugin for Simple {
 
         info!("init plugin with tag {}", tag);
 
+        let voice_h = host.voice_handler();
+        let out_voice_h = host.out_voice_handler();
+
         Self {
-            voice_handler: SimpleVoiceHandler::new(host.voice_handler(), host.out_voice_handler()),
+            voice_handler: SimpleVoiceHandler::new(voice_h, out_voice_h),
             host,
             tag,
             param_names: vec![
@@ -143,7 +146,11 @@ impl Plugin for Simple {
         InfoBuilder::new_full_gen("Simple", "Simple", self.param_names.len() as u32)
             // InfoBuilder::new_effect("Simple", "Simple", self.param_names.len() as u32)
             // .want_new_tick()
+            // Looks like MIDI out doesn't work :(
+            // https://forum.image-line.com/viewtopic.php?f=100&t=199371
+            // https://forum.image-line.com/viewtopic.php?f=100&t=199258
             .with_out_voices(1)
+            .midi_out()
             .build()
     }
 
@@ -190,13 +197,20 @@ impl Plugin for Simple {
             self.say_hello_hint();
 
             if enabled {
-                self.show_annoying_message()
+                self.show_annoying_message();
+                // self.host.on_message(self.tag, message::ActivateMidi);
             }
 
             self.host
                 .on_parameter(self.tag, 0, ValuePtr::new(0.123456789_f32.as_raw_ptr()));
-
         }
+
+        // self.host.midi_out(self.tag, MidiMessage {
+            // status: 0x90,
+            // data1: 60,
+            // data2: 100,
+            // port: 2,
+        // });
 
         Box::new(0)
     }

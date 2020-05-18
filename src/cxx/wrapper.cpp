@@ -257,6 +257,30 @@ void host_on_hint(void *host, TPluginTag tag, char *text) {
     ((TFruityPlugHost *)host)->OnHint(tag, text);
 }
 
+void host_midi_out(void *host, TPluginTag tag, unsigned char status,
+                   unsigned char data1, unsigned char data2,
+                   unsigned char port) {
+    TMIDIOutMsg *msg = (TMIDIOutMsg *)malloc(sizeof(TMIDIOutMsg));
+    msg->Status = status;
+    msg->Data1 = data1;
+    msg->Data2 = data2;
+    msg->Port = port;
+
+    ((TFruityPlugHost *)host)->MIDIOut(tag, (intptr_t)msg);
+}
+
+void host_midi_out_del(void *host, TPluginTag tag, unsigned char status,
+                       unsigned char data1, unsigned char data2,
+                       unsigned char port) {
+    TMIDIOutMsg *msg = (TMIDIOutMsg *)malloc(sizeof(TMIDIOutMsg));
+    msg->Status = status;
+    msg->Data1 = data1;
+    msg->Data2 = data2;
+    msg->Port = port;
+
+    ((TFruityPlugHost *)host)->MIDIOut_Delayed(tag, (intptr_t)msg);
+}
+
 void host_release_voice(void *host, intptr_t tag) {
     ((TFruityPlugHost *)host)->Voice_Release(tag);
 }
