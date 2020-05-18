@@ -222,7 +222,9 @@ void _stdcall PluginWrapper::MIDIIn(int &msg) {
     plugin_midi_in(adapter, message);
 }
 
-void _stdcall PluginWrapper::MsgIn(intptr_t msg) { plugin_loop_in(adapter, msg); }
+void _stdcall PluginWrapper::MsgIn(intptr_t msg) {
+    plugin_loop_in(adapter, msg);
+}
 
 int _stdcall PluginWrapper::OutputVoice_ProcessEvent(TOutVoiceHandle handle,
                                                      int event_id,
@@ -245,6 +247,10 @@ void _stdcall PluginWrapper::OutputVoice_Kill(TVoiceHandle handle) {
 intptr_t host_on_message(void *host, TPluginTag tag, Message message) {
     return ((TFruityPlugHost *)host)
         ->Dispatcher(tag, message.id, message.index, message.value);
+}
+
+void host_on_parameter(void *host, TPluginTag tag, int index, int value) {
+    ((TFruityPlugHost *)host)->OnParamChanged(tag, index, value);
 }
 
 void host_release_voice(void *host, intptr_t tag) {

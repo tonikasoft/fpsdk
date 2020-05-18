@@ -1,6 +1,7 @@
 //! Plugin's host (FL Studio).
 use std::collections::HashMap;
 use std::ffi::c_void;
+use std::os::raw::c_int;
 use std::sync::atomic::AtomicPtr;
 use std::sync::{Arc, Mutex};
 
@@ -50,24 +51,31 @@ impl Host {
         todo!()
     }
 
-    // pub fn on_message(&mut self, tag: plugin::Tag, message: plugin::Message<'_>) -> ValuePtr {
-    // match message {
-    // plugin::Message::TicksToTime(_) => {
-    // let ffi_message = ffi::Message::from(message);
-    // unsafe { host_on_message(*self.host_ptr.get_mut(), tag.0, ffi_message.clone()) };
-    // ValuePtr(ffi_message.index)
-    // }
-    // _ => ValuePtr(unsafe {
-    // host_on_message(*self.host_ptr.get_mut(), tag.0, message.into())
-    // }),
-    // }
-    // }
-
     /// Send message to host.
     ///
     /// See [`plugin::message`](../plugin/message/index.html).
     pub fn on_message<T: message::Message>(&mut self, tag: plugin::Tag, message: T) -> T::Return {
         message.send(tag, self)
+    }
+
+    /// Notify the host that a parameter value has changed.
+    ///
+    /// In order to make your parameters recordable in FL Studio, you have to call this function
+    /// whenever a parameter is changed from within your plugin (probably because the user turned a
+    /// wheel or something).
+    ///
+    /// - tag - plugin's tag.
+    /// - index - the parameter index
+    /// - value - the new parameter value.
+    pub fn on_parameter(&mut self, tag: plugin::Tag, index: usize, value: ValuePtr) {
+        unsafe {
+            host_on_parameter(
+                *self.host_ptr.get_mut(),
+                tag.0,
+                index as c_int,
+                value.0 as c_int,
+            )
+        };
     }
 
     /// Get [`Voicer`](struct.Voicer.html)
@@ -79,6 +87,10 @@ impl Host {
     pub fn out_voice_handler(&self) -> Arc<Mutex<OutVoicer>> {
         Arc::clone(&self.out_voicer)
     }
+}
+
+extern "C" {
+    fn host_on_parameter(host: *mut c_void, tag: intptr_t, index: c_int, value: c_int);
 }
 
 /// Use this to manually release, kill and notify voices about events.

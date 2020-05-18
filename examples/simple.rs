@@ -187,6 +187,9 @@ impl Plugin for Simple {
             if enabled {
                 self.show_annoying_message()
             }
+
+            self.host
+                .on_parameter(self.tag, 0, ValuePtr::new(0.123456789_f32.as_raw_ptr()))
         }
 
         Box::new(0)
@@ -228,7 +231,7 @@ impl Plugin for Simple {
             "{} process param: index {}, value {}, flags {:?}",
             self.tag,
             index,
-            value.get::<i32>(),
+            value.get::<f32>(),
             flags
         );
         Box::new(0)

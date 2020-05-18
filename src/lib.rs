@@ -192,6 +192,11 @@ extern "C" {
 pub struct ValuePtr(intptr_t);
 
 impl ValuePtr {
+    /// Constructor.
+    pub fn new(ptr: intptr_t) -> Self {
+        Self(ptr)
+    }
+
     /// Get value.
     ///
     /// See [`FromRawPtr`](trait.FromRawPtr.html) for implemented types.
@@ -231,6 +236,18 @@ primitive_as_raw_ptr!(*const c_void);
 impl AsRawPtr for bool {
     fn as_raw_ptr(&self) -> intptr_t {
         (self.to_owned() as u8).into()
+    }
+}
+
+impl AsRawPtr for f32 {
+    fn as_raw_ptr(&self) -> intptr_t {
+        self.to_bits() as intptr_t
+    }
+}
+
+impl AsRawPtr for f64 {
+    fn as_raw_ptr(&self) -> intptr_t {
+        self.to_bits() as intptr_t
     }
 }
 
