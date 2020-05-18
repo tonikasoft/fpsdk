@@ -119,6 +119,7 @@ extern "C" intptr_t host_on_message(void *host, TPluginTag tag,
                                     Message message);
 extern "C" void host_on_parameter(void *host, TPluginTag tag, int index,
                                   int value);
+extern "C" void host_on_hint(void *host, TPluginTag tag, char *text);
 extern "C" void host_release_voice(void *host, intptr_t tag);
 extern "C" void host_kill_voice(void *host, intptr_t tag);
 extern "C" intptr_t host_on_voice_event(void *host, intptr_t tag,

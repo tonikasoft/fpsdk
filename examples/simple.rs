@@ -112,6 +112,10 @@ impl Simple {
             )),
         );
     }
+
+    fn say_hello_hint(&mut self) {
+        self.host.on_hint(self.tag, "^c Hello".to_string());
+    }
 }
 
 impl Plugin for Simple {
@@ -183,13 +187,15 @@ impl Plugin for Simple {
         if let host::Message::SetEnabled(enabled) = message {
             self.add_notes();
             self.log_selection();
+            self.say_hello_hint();
 
             if enabled {
                 self.show_annoying_message()
             }
 
             self.host
-                .on_parameter(self.tag, 0, ValuePtr::new(0.123456789_f32.as_raw_ptr()))
+                .on_parameter(self.tag, 0, ValuePtr::new(0.123456789_f32.as_raw_ptr()));
+
         }
 
         Box::new(0)

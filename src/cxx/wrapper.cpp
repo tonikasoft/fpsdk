@@ -253,6 +253,10 @@ void host_on_parameter(void *host, TPluginTag tag, int index, int value) {
     ((TFruityPlugHost *)host)->OnParamChanged(tag, index, value);
 }
 
+void host_on_hint(void *host, TPluginTag tag, char *text) {
+    ((TFruityPlugHost *)host)->OnHint(tag, text);
+}
+
 void host_release_voice(void *host, intptr_t tag) {
     ((TFruityPlugHost *)host)->Voice_Release(tag);
 }
