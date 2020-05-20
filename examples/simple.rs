@@ -18,7 +18,7 @@ use fpsdk::plugin::message;
 use fpsdk::plugin::{self, Info, InfoBuilder, Plugin, StateReader, StateWriter};
 use fpsdk::voice::{self, ReceiveVoiceHandler, SendVoiceHandler, Voice};
 use fpsdk::{
-    create_plugin, AsRawPtr, MessageBoxFlags, MidiMessage, Note, Notes, NotesFlags,
+    create_plugin, AsRawPtr, FromRawPtr, MessageBoxFlags, MidiMessage, Note, Notes, NotesFlags,
     ProcessParamFlags, TimeFormat, ValuePtr,
 };
 
@@ -150,6 +150,7 @@ impl Plugin for Simple {
             // https://forum.image-line.com/viewtopic.php?f=100&t=199371
             // https://forum.image-line.com/viewtopic.php?f=100&t=199258
             .with_out_voices(1)
+            .loop_out()
             .midi_out()
             .build()
     }
@@ -184,7 +185,7 @@ impl Plugin for Simple {
             })
             .unwrap_or_else(|e| error!("error reading value from state {}", e));
     }
-
+    
     fn on_message(&mut self, message: host::Message) -> Box<dyn AsRawPtr> {
         self.host.on_message(
             self.tag,
@@ -199,17 +200,24 @@ impl Plugin for Simple {
             if enabled {
                 self.show_annoying_message();
                 // self.host.on_message(self.tag, message::ActivateMidi);
+                self.host.loop_out(
+                    self.tag,
+                    ValuePtr::from_raw_ptr(format!("{:?}", message).as_raw_ptr()),
+                );
             }
 
-            self.host
-                .on_parameter(self.tag, 0, ValuePtr::new(0.123456789_f32.as_raw_ptr()));
+            self.host.on_parameter(
+                self.tag,
+                0,
+                ValuePtr::from_raw_ptr(0.123456789_f32.as_raw_ptr()),
+            );
         }
 
         // self.host.midi_out(self.tag, MidiMessage {
-            // status: 0x90,
-            // data1: 60,
-            // data2: 100,
-            // port: 2,
+        // status: 0x90,
+        // data1: 60,
+        // data2: 100,
+        // port: 2,
         // });
 
         Box::new(0)
@@ -238,7 +246,7 @@ impl Plugin for Simple {
 
     // looks like doesn't work
     fn loop_in(&mut self, message: ValuePtr) {
-        trace!("{:?} loop_in", message);
+        trace!("{} loop_in", message.get::<String>());
     }
 
     fn process_param(

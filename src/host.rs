@@ -150,6 +150,25 @@ impl Host {
         };
     }
 
+    /// **MAY NOT WORK**
+    /// 
+    /// Ask for a message to be dispatched to itself when the current mixing tick will be played
+    /// (to synchronize stuff) 
+    ///
+    /// (see [`Plugin::loop_in`](../plugin/trait.Plugin.html#method.loop_in)). 
+    ///
+    /// The message is guaranteed to be dispatched, however it could be sent immediately if it
+    /// couldn't be buffered (it's only buffered when playing).
+    pub fn loop_out(&mut self, tag: plugin::Tag, message: ValuePtr) {
+        unsafe { host_loop_out(*self.host_ptr.get_mut(), tag.0, message.0) };
+    }
+
+    /// Remove the buffered message scheduled by
+    /// [`Host::loop_out`](struct.Host.html#method.loop_out), so that it will never be dispatched.
+    pub fn loop_kill(&mut self, tag: plugin::Tag, message: ValuePtr) {
+        unsafe { host_loop_kill(*self.host_ptr.get_mut(), tag.0, message.0) };
+    }
+
     /// Get [`Voicer`](struct.Voicer.html)
     pub fn voice_handler(&self) -> Arc<Mutex<Voicer>> {
         Arc::clone(&self.voicer)
@@ -180,6 +199,8 @@ extern "C" {
         data2: c_uchar,
         port: c_uchar,
     );
+    fn host_loop_out(host: *mut c_void, tag: intptr_t, message: intptr_t);
+    fn host_loop_kill(host: *mut c_void, tag: intptr_t, message: intptr_t);
 }
 
 /// Use this to manually release, kill and notify voices about events.

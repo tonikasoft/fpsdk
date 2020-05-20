@@ -281,6 +281,14 @@ void host_midi_out_del(void *host, TPluginTag tag, unsigned char status,
     ((TFruityPlugHost *)host)->MIDIOut_Delayed(tag, (intptr_t)msg);
 }
 
+void host_loop_out(void *host, TPluginTag tag, intptr_t msg) {
+    ((TFruityPlugHost *)host)->PlugMsg_Delayed(tag, msg);
+}
+
+void host_loop_kill(void *host, TPluginTag tag, intptr_t msg) {
+    ((TFruityPlugHost *)host)->PlugMsg_Kill(tag, msg);
+}
+
 void host_release_voice(void *host, intptr_t tag) {
     ((TFruityPlugHost *)host)->Voice_Release(tag);
 }

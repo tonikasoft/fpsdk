@@ -186,24 +186,6 @@ extern "C" {
     fn alloc_real_cstr(raw_str: *mut c_char) -> *mut c_char;
 }
 
-/// Raw pointer to value.
-#[derive(Debug)]
-pub struct ValuePtr(intptr_t);
-
-impl ValuePtr {
-    /// Constructor.
-    pub fn new(ptr: intptr_t) -> Self {
-        Self(ptr)
-    }
-
-    /// Get value.
-    ///
-    /// See [`FromRawPtr`](trait.FromRawPtr.html) for implemented types.
-    pub fn get<T: FromRawPtr>(&self) -> T {
-        T::from_raw_ptr(self.0)
-    }
-}
-
 /// For types, which can be represented as `intptr_t`.
 pub trait AsRawPtr {
     /// Conversion method.
@@ -313,6 +295,25 @@ impl FromRawPtr for String {
 impl FromRawPtr for bool {
     fn from_raw_ptr(value: intptr_t) -> Self {
         value != 0
+    }
+}
+
+/// Raw pointer to value.
+#[derive(Debug)]
+pub struct ValuePtr(intptr_t);
+
+impl ValuePtr {
+    /// Get value.
+    ///
+    /// See [`FromRawPtr`](trait.FromRawPtr.html) for implemented types.
+    pub fn get<T: FromRawPtr>(&self) -> T {
+        T::from_raw_ptr(self.0)
+    }
+}
+
+impl FromRawPtr for ValuePtr {
+    fn from_raw_ptr(value: intptr_t) -> Self {
+        ValuePtr(value)
     }
 }
 

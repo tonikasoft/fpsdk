@@ -141,7 +141,7 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe + Send + Sync + 'static {
     /// Can be called from GUI or mixer threads.
     fn midi_in(&mut self, _message: MidiMessage) {}
     /// **MAY NOT WORK**
-    /// 
+    ///
     /// This gets called with a new buffered message to the plugin itself.
     fn loop_in(&mut self, _message: ValuePtr) {}
 }
@@ -645,7 +645,6 @@ pub unsafe extern "C" fn plugin_save_state(adapter: *mut PluginAdapter, stream: 
 pub unsafe extern "C" fn plugin_load_state(adapter: *mut PluginAdapter, stream: *mut c_void) {
     (*adapter).0.load_state(StateReader(stream));
 }
-
 
 /// [`Plugin::loop_in`](Plugin.html#method.loop_in) FFI.
 ///
