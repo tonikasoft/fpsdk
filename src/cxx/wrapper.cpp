@@ -289,6 +289,14 @@ void host_loop_kill(void *host, TPluginTag tag, intptr_t msg) {
     ((TFruityPlugHost *)host)->PlugMsg_Kill(tag, msg);
 }
 
+void host_lock_mix(void *host) {
+    ((TFruityPlugHost *)host)->LockMix();
+}
+
+void host_unlock_mix(void *host) {
+    ((TFruityPlugHost *)host)->UnlockMix();
+}
+
 void host_release_voice(void *host, intptr_t tag) {
     ((TFruityPlugHost *)host)->Voice_Release(tag);
 }

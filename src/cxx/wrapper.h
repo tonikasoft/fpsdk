@@ -127,6 +127,8 @@ extern "C" void host_midi_out_del(void *host, TPluginTag tag, unsigned char
         status, unsigned char data1, unsigned char data2, unsigned char port);
 extern "C" void host_loop_out(void *host, TPluginTag tag, intptr_t msg);
 extern "C" void host_loop_kill(void *host, TPluginTag tag, intptr_t msg);
+extern "C" void host_lock_mix(void *host);
+extern "C" void host_unlock_mix(void *host);
 
 extern "C" void host_release_voice(void *host, intptr_t tag);
 extern "C" void host_kill_voice(void *host, intptr_t tag);

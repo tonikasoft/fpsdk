@@ -178,6 +178,19 @@ impl Host {
     pub fn out_voice_handler(&self) -> Arc<Mutex<OutVoicer>> {
         Arc::clone(&self.out_voicer)
     }
+
+    /// This is a function for thread synchronization. When this is called, no more voices shall be
+    /// created and there will be no more rendering until
+    /// [`Host::unlock_mix`](struct.Host.html#method.unlock_mix) has been called
+    pub fn lock_mix(&mut self) {
+        unsafe { host_lock_mix(*self.host_ptr.get_mut()) };
+    }
+
+    /// Unlocks the mix thread if it was previously locked with
+    /// [`Host::lock_mix`](struct.Host.html#method.lock_mix)
+    pub fn unlock_mix(&mut self) {
+        unsafe { host_unlock_mix(*self.host_ptr.get_mut()) };
+    } 
 }
 
 extern "C" {
@@ -201,6 +214,8 @@ extern "C" {
     );
     fn host_loop_out(host: *mut c_void, tag: intptr_t, message: intptr_t);
     fn host_loop_kill(host: *mut c_void, tag: intptr_t, message: intptr_t);
+    fn host_lock_mix(host: *mut c_void);
+    fn host_unlock_mix(host: *mut c_void);
 }
 
 /// Use this to manually release, kill and notify voices about events.
