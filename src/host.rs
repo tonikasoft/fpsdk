@@ -198,6 +198,20 @@ impl Host {
         unsafe { host_unlock_plugin(*self.host_ptr.get_mut(), tag.0) };
     }
 
+    /// This is a function for thread synchronization. When this is called, no more voices shall be
+    /// created and there will be no more rendering until
+    /// [`Host::resume_out`](struct.Host.html#method.resume_out) has been called. Unlike
+    /// [`Host::lock_mix`](struct.Host.html#method.lock_mix), this function also stops all sound.
+    pub fn suspend_out(&mut self) {
+        unsafe { host_suspend_out(*self.host_ptr.get_mut()) };
+    }
+
+    /// Unlocks the mixer thread if it was previously locked with
+    /// [`Host::suspend_out`](struct.Host.html#method.suspend_out).
+    pub fn resume_out(&mut self) {
+        unsafe { host_resume_out(*self.host_ptr.get_mut()) };
+    }
+
     /// Get [`Voicer`](struct.Voicer.html)
     pub fn voice_handler(&self) -> Arc<Mutex<Voicer>> {
         Arc::clone(&self.voicer)
@@ -234,6 +248,8 @@ extern "C" {
     fn host_unlock_mix(host: *mut c_void);
     fn host_lock_plugin(host: *mut c_void, tag: intptr_t);
     fn host_unlock_plugin(host: *mut c_void, tag: intptr_t);
+    fn host_suspend_out(host: *mut c_void);
+    fn host_resume_out(host: *mut c_void);
 }
 
 /// Use this to manually release, kill and notify voices about events.

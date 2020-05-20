@@ -305,6 +305,14 @@ void host_unlock_plugin(void *host, TPluginTag tag) {
     ((TFruityPlugHost *)host)->UnlockPlugin(tag);
 }
 
+void host_suspend_out(void *host) {
+    ((TFruityPlugHost *)host)->SuspendOutput();
+}
+
+void host_resume_out(void *host) {
+    ((TFruityPlugHost *)host)->ResumeOutput();
+}
+
 void host_release_voice(void *host, intptr_t tag) {
     ((TFruityPlugHost *)host)->Voice_Release(tag);
 }
