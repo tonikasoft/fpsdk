@@ -129,6 +129,8 @@ extern "C" void host_loop_out(void *host, TPluginTag tag, intptr_t msg);
 extern "C" void host_loop_kill(void *host, TPluginTag tag, intptr_t msg);
 extern "C" void host_lock_mix(void *host);
 extern "C" void host_unlock_mix(void *host);
+extern "C" void host_lock_plugin(void *host, TPluginTag tag);
+extern "C" void host_unlock_plugin(void *host, TPluginTag tag);
 
 extern "C" void host_release_voice(void *host, intptr_t tag);
 extern "C" void host_kill_voice(void *host, intptr_t tag);

@@ -169,6 +169,35 @@ impl Host {
         unsafe { host_loop_kill(*self.host_ptr.get_mut(), tag.0, message.0) };
     }
 
+    /// This is a function for thread synchronization. When this is called, no more voices shall be
+    /// created and there will be no more rendering until
+    /// [`Host::unlock_mix`](struct.Host.html#method.unlock_mix) has been called.
+    pub fn lock_mix(&mut self) {
+        unsafe { host_lock_mix(*self.host_ptr.get_mut()) };
+    }
+
+    /// Unlocks the mix thread if it was previously locked with.
+    /// [`Host::lock_mix`](struct.Host.html#method.lock_mix)
+    pub fn unlock_mix(&mut self) {
+        unsafe { host_unlock_mix(*self.host_ptr.get_mut()) };
+    } 
+
+    /// **Warning: this function is not very performant, so avoid using it if possible.**
+    /// 
+    /// This is an alternative to [`Host::lock_mix`](struct.Host.html#method.lock_mix). 
+    /// It won't freeze the audio. This function can only be called from the GUI thread! 
+    pub fn lock_plugin(&mut self, tag: plugin::Tag) {
+        unsafe { host_lock_plugin(*self.host_ptr.get_mut(), tag.0) };
+    } 
+
+    /// **Warning: this function is not very performant, so avoid using it if possible.**
+    /// 
+    /// Unlocks the mix thread if it was previously locked with
+    /// [`Host::lock_plugin`](struct.Host.html#method.lock_plugin). 
+    pub fn unlock_plugin(&mut self, tag: plugin::Tag) {
+        unsafe { host_unlock_plugin(*self.host_ptr.get_mut(), tag.0) };
+    }
+
     /// Get [`Voicer`](struct.Voicer.html)
     pub fn voice_handler(&self) -> Arc<Mutex<Voicer>> {
         Arc::clone(&self.voicer)
@@ -178,19 +207,6 @@ impl Host {
     pub fn out_voice_handler(&self) -> Arc<Mutex<OutVoicer>> {
         Arc::clone(&self.out_voicer)
     }
-
-    /// This is a function for thread synchronization. When this is called, no more voices shall be
-    /// created and there will be no more rendering until
-    /// [`Host::unlock_mix`](struct.Host.html#method.unlock_mix) has been called
-    pub fn lock_mix(&mut self) {
-        unsafe { host_lock_mix(*self.host_ptr.get_mut()) };
-    }
-
-    /// Unlocks the mix thread if it was previously locked with
-    /// [`Host::lock_mix`](struct.Host.html#method.lock_mix)
-    pub fn unlock_mix(&mut self) {
-        unsafe { host_unlock_mix(*self.host_ptr.get_mut()) };
-    } 
 }
 
 extern "C" {
@@ -216,6 +232,8 @@ extern "C" {
     fn host_loop_kill(host: *mut c_void, tag: intptr_t, message: intptr_t);
     fn host_lock_mix(host: *mut c_void);
     fn host_unlock_mix(host: *mut c_void);
+    fn host_lock_plugin(host: *mut c_void, tag: intptr_t);
+    fn host_unlock_plugin(host: *mut c_void, tag: intptr_t);
 }
 
 /// Use this to manually release, kill and notify voices about events.

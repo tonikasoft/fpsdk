@@ -297,6 +297,14 @@ void host_unlock_mix(void *host) {
     ((TFruityPlugHost *)host)->UnlockMix();
 }
 
+void host_lock_plugin(void *host, TPluginTag tag) {
+    ((TFruityPlugHost *)host)->LockPlugin(tag);
+}
+
+void host_unlock_plugin(void *host, TPluginTag tag) {
+    ((TFruityPlugHost *)host)->UnlockPlugin(tag);
+}
+
 void host_release_voice(void *host, intptr_t tag) {
     ((TFruityPlugHost *)host)->Voice_Release(tag);
 }
