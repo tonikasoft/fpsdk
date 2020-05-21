@@ -254,6 +254,11 @@ void host_on_parameter(void *host, TPluginTag tag, int index, int value) {
     ((TFruityPlugHost *)host)->OnParamChanged(tag, index, value);
 }
 
+void host_on_controller(void *host, TPluginTag tag, intptr_t index,
+                        intptr_t value) {
+    ((TFruityPlugHost *)host)->OnControllerChanged(tag, index, value);
+}
+
 void host_on_hint(void *host, TPluginTag tag, char *text) {
     ((TFruityPlugHost *)host)->OnHint(tag, text);
 }

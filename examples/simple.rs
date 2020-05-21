@@ -68,13 +68,14 @@ impl Plugin for Simple {
 
         InfoBuilder::new_full_gen("Simple", "Simple", self.param_names.len() as u32)
             // InfoBuilder::new_effect("Simple", "Simple", self.param_names.len() as u32)
-            // .want_new_tick()
+            .want_new_tick()
+            .with_out_ctrls(1)
             .with_out_voices(1)
-            .loop_out()
+            // .loop_out()
             // Looks like MIDI out doesn't work :(
             // https://forum.image-line.com/viewtopic.php?f=100&t=199371
             // https://forum.image-line.com/viewtopic.php?f=100&t=199258
-            .midi_out()
+            // .midi_out()
             .build()
     }
 
@@ -143,7 +144,8 @@ impl Plugin for Simple {
     }
 
     fn tick(&mut self) {
-        trace!("{} receive new tick", self.tag);
+        // assign to itself to see it in log
+        self.host.on_controller(self.tag, 0, 12345_u16);
     }
 
     fn idle(&mut self) {
@@ -168,6 +170,12 @@ impl Plugin for Simple {
             value.get::<f32>(),
             flags
         );
+
+        if flags.contains(ProcessParamFlags::INTERNAL_CTRL | ProcessParamFlags::UPDATE_VALUE) {
+            // will work if assigned to itself
+            info!("internall control value {}", value.get::<u16>());
+        }
+
         Box::new(0)
     }
 

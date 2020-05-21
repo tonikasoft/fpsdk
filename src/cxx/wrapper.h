@@ -121,6 +121,8 @@ extern "C" intptr_t host_on_message(void *host, TPluginTag tag,
                                     Message message);
 extern "C" void host_on_parameter(void *host, TPluginTag tag, int index,
                                   int value);
+extern "C" void host_on_controller(void *host, TPluginTag tag, intptr_t index,
+                                   intptr_t value);
 extern "C" void host_on_hint(void *host, TPluginTag tag, char *text);
 extern "C" void host_midi_out(void *host, TPluginTag tag, unsigned char status,
                               unsigned char data1, unsigned char data2,

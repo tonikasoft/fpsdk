@@ -37,11 +37,11 @@ impl Host {
         }
     }
 
-    /// Get the version of FL Studio. It is stored in one integer. If the version of FL Studio
-    /// would be 1.2.3 for example, `version` would be 1002003
-    pub fn version(&self) -> i32 {
-        todo!()
-    }
+    // Get the version of FL Studio. It is stored in one integer. If the version of FL Studio
+    // would be 1.2.3 for example, `version` would be 1002003
+    // pub fn version(&self) -> i32 {
+        // todo!()
+    // }
 
     /// Send message to host.
     ///
@@ -66,6 +66,21 @@ impl Host {
                 tag.0,
                 index as c_int,
                 value.0 as c_int,
+            )
+        };
+    }
+
+    /// Notify the host that an internal controller has changed.
+    ///
+    /// Check out [this](https://forum.image-line.com/viewtopic.php?p=26368#p26368) post for more
+    /// info about an internal controller implemenation.
+    pub fn on_controller(&mut self, tag: plugin::Tag, index: usize, value: u16) {
+        unsafe {
+            host_on_controller(
+                *self.host_ptr.get_mut(),
+                tag.0,
+                index as intptr_t,
+                value.as_raw_ptr(),
             )
         };
     }
@@ -296,6 +311,41 @@ impl Host {
     }
 }
 
+extern "C" {
+    fn host_on_parameter(host: *mut c_void, tag: intptr_t, index: c_int, value: c_int);
+    fn host_on_controller(host: *mut c_void, tag: intptr_t, index: intptr_t, value: intptr_t);
+    fn host_on_hint(host: *mut c_void, tag: intptr_t, text: *mut c_char);
+    fn host_midi_out(
+        host: *mut c_void,
+        tag: intptr_t,
+        status: c_uchar,
+        data1: c_uchar,
+        data2: c_uchar,
+        port: c_uchar,
+    );
+    fn host_midi_out_del(
+        host: *mut c_void,
+        tag: intptr_t,
+        status: c_uchar,
+        data1: c_uchar,
+        data2: c_uchar,
+        port: c_uchar,
+    );
+    fn host_loop_out(host: *mut c_void, tag: intptr_t, message: intptr_t);
+    fn host_loop_kill(host: *mut c_void, tag: intptr_t, message: intptr_t);
+    fn host_lock_mix(host: *mut c_void);
+    fn host_unlock_mix(host: *mut c_void);
+    fn host_lock_plugin(host: *mut c_void, tag: intptr_t);
+    fn host_unlock_plugin(host: *mut c_void, tag: intptr_t);
+    fn host_suspend_out(host: *mut c_void);
+    fn host_resume_out(host: *mut c_void);
+    fn host_get_input_buf(host: *mut c_void, tag: intptr_t, offset: intptr_t) -> TIOBuffer;
+    fn host_get_output_buf(host: *mut c_void, tag: intptr_t, offset: intptr_t) -> TIOBuffer;
+    fn host_get_insert_buf(host: *mut c_void, tag: intptr_t, offset: intptr_t) -> *mut c_void;
+    fn host_get_mix_buf(host: *mut c_void, offset: intptr_t) -> *mut c_void;
+    fn host_get_send_buf(host: *mut c_void, offset: intptr_t) -> *mut c_void;
+}
+
 /// Type of the write-only buffer you want to get, using
 /// [`Host::buf_write`](../struct.Host.html#method.buf_write).
 #[derive(Debug)]
@@ -334,40 +384,6 @@ pub enum Buffer {
     ///
     /// The value is the index of the send buffer.
     SendWrite(usize),
-}
-
-extern "C" {
-    fn host_on_parameter(host: *mut c_void, tag: intptr_t, index: c_int, value: c_int);
-    fn host_on_hint(host: *mut c_void, tag: intptr_t, text: *mut c_char);
-    fn host_midi_out(
-        host: *mut c_void,
-        tag: intptr_t,
-        status: c_uchar,
-        data1: c_uchar,
-        data2: c_uchar,
-        port: c_uchar,
-    );
-    fn host_midi_out_del(
-        host: *mut c_void,
-        tag: intptr_t,
-        status: c_uchar,
-        data1: c_uchar,
-        data2: c_uchar,
-        port: c_uchar,
-    );
-    fn host_loop_out(host: *mut c_void, tag: intptr_t, message: intptr_t);
-    fn host_loop_kill(host: *mut c_void, tag: intptr_t, message: intptr_t);
-    fn host_lock_mix(host: *mut c_void);
-    fn host_unlock_mix(host: *mut c_void);
-    fn host_lock_plugin(host: *mut c_void, tag: intptr_t);
-    fn host_unlock_plugin(host: *mut c_void, tag: intptr_t);
-    fn host_suspend_out(host: *mut c_void);
-    fn host_resume_out(host: *mut c_void);
-    fn host_get_input_buf(host: *mut c_void, tag: intptr_t, offset: intptr_t) -> TIOBuffer;
-    fn host_get_output_buf(host: *mut c_void, tag: intptr_t, offset: intptr_t) -> TIOBuffer;
-    fn host_get_insert_buf(host: *mut c_void, tag: intptr_t, offset: intptr_t) -> *mut c_void;
-    fn host_get_mix_buf(host: *mut c_void, offset: intptr_t) -> *mut c_void;
-    fn host_get_send_buf(host: *mut c_void, offset: intptr_t) -> *mut c_void;
 }
 
 #[repr(C)]
