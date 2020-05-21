@@ -1,4 +1,5 @@
 #include "wrapper.h"
+#include "fp_plugclass.h"
 #include "src/lib.rs.h"
 #include <cstring>
 
@@ -289,13 +290,9 @@ void host_loop_kill(void *host, TPluginTag tag, intptr_t msg) {
     ((TFruityPlugHost *)host)->PlugMsg_Kill(tag, msg);
 }
 
-void host_lock_mix(void *host) {
-    ((TFruityPlugHost *)host)->LockMix();
-}
+void host_lock_mix(void *host) { ((TFruityPlugHost *)host)->LockMix(); }
 
-void host_unlock_mix(void *host) {
-    ((TFruityPlugHost *)host)->UnlockMix();
-}
+void host_unlock_mix(void *host) { ((TFruityPlugHost *)host)->UnlockMix(); }
 
 void host_lock_plugin(void *host, TPluginTag tag) {
     ((TFruityPlugHost *)host)->LockPlugin(tag);
@@ -309,22 +306,54 @@ void host_suspend_out(void *host) {
     ((TFruityPlugHost *)host)->SuspendOutput();
 }
 
-void host_resume_out(void *host) {
-    ((TFruityPlugHost *)host)->ResumeOutput();
+void host_resume_out(void *host) { ((TFruityPlugHost *)host)->ResumeOutput(); }
+
+TIOBuffer host_get_input_buf(void *host, TPluginTag tag, intptr_t offset) {
+    TIOBuffer buf = {
+        0,
+        0,
+    };
+    ((TFruityPlugHost *)host)->GetInBuffer(tag, offset, &buf);
+
+    return buf;
 }
 
-void host_release_voice(void *host, intptr_t tag) {
-    ((TFruityPlugHost *)host)->Voice_Release(tag);
+TIOBuffer host_get_output_buf(void *host, TPluginTag tag, intptr_t offset) {
+    TIOBuffer buf = {
+        0,
+        0,
+    };
+    ((TFruityPlugHost *)host)->GetOutBuffer(tag, offset, &buf);
+
+    return buf;
+}
+
+void *host_get_insert_buf(void *host, TPluginTag tag, intptr_t offset) {
+    return ((TFruityPlugHost *)host)->GetInsBuffer(tag, offset);
+}
+
+void *host_get_mix_buf(void *host, intptr_t offset) {
+    return ((TFruityPlugHost *)host)->GetMixBuffer(offset);
+}
+
+void *host_get_send_buf(void *host, intptr_t offset) {
+    return ((TFruityPlugHost *)host)->GetSendBuffer(offset);
+}
+
+// Host voice-related
+
+intptr_t host_on_voice_event(void *host, intptr_t tag, Message message) {
+    return ((TFruityPlugHost *)host)
+        ->Voice_ProcessEvent((TOutVoiceHandle)tag, message.id, message.index,
+                             message.value);
 }
 
 void host_kill_voice(void *host, intptr_t tag) {
     ((TFruityPlugHost *)host)->Voice_Kill(tag, true);
 }
 
-intptr_t host_on_voice_event(void *host, intptr_t tag, Message message) {
-    return ((TFruityPlugHost *)host)
-        ->Voice_ProcessEvent((TOutVoiceHandle)tag, message.id, message.index,
-                             message.value);
+void host_release_voice(void *host, intptr_t tag) {
+    ((TFruityPlugHost *)host)->Voice_Release(tag);
 }
 
 intptr_t host_trig_out_voice(void *host, Params *params, int32_t index,

@@ -29,7 +29,7 @@ pub trait ReceiveVoiceHandler: Send + Sync {
     }
 }
 
-/// You should add this marker to your voice type.
+/// You should implement this trait to your voice type.
 pub trait Voice: Send + Sync {
     /// Get ID of the voice.
     fn tag(&self) -> Tag;
@@ -314,4 +314,18 @@ pub unsafe extern "C" fn out_voice_handler_on_event(
         .and_then(|out_handler| out_handler.on_event(Tag(tag), message.into()))
         .map(|result| result.0)
         .unwrap_or(-1)
+}
+
+/// Translate FL voice volume to linear velocity (0.0..1.0).
+pub fn vol_to_vel(vol: f32) -> f32 {
+    inv_log_vol(vol * 10.0, 2610.0 / 127.0)
+}
+
+/// Translate FL voice volume to linear velocity (0.0..127.0).
+pub fn vol_to_midi_vel(vol: f32) -> f32 {
+    inv_log_vol(vol * 10.0, 2610.0 / 127.0) * 127.0
+}
+
+fn inv_log_vol(value: f32, max_value: f32) -> f32 {
+    (value + 1.0).ln() / (max_value + 1.0).ln()
 }

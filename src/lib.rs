@@ -8,9 +8,10 @@
 //! You should implement [`Plugin`](plugin/trait.Plugin.html) and export it with
 //! [`create_plugin!`](macro.create_plugin.html).
 //!
-//! To talk to host use [`Host`](host/struct.Host.html).
+//! To talk to the host use [`Host`](host/struct.Host.html), which is passed to the plugin's
+//! constructor.
 //!
-//! `examples/simple.rs` provides you with more details.
+//! `examples/simple.rs` in the code repo provides you with more details.
 //!
 //! ## Types of plugins
 //!

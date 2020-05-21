@@ -109,11 +109,13 @@ extern "C" intptr_t voice_handler_on_event(PluginAdapter *adapter, void *voice,
 extern "C" void out_voice_handler_kill(PluginAdapter *adapter, intptr_t tag);
 extern "C" intptr_t out_voice_handler_on_event(PluginAdapter *adapter,
                                                intptr_t tag, Message message);
+
 // IStream
 extern "C" int32_t istream_read(void *istream, uint8_t *data, uint32_t size,
                                 uint32_t *read);
 extern "C" int32_t istream_write(void *istream, const uint8_t *data,
                                  uint32_t size, uint32_t *write);
+
 // Host
 extern "C" intptr_t host_on_message(void *host, TPluginTag tag,
                                     Message message);
@@ -123,8 +125,9 @@ extern "C" void host_on_hint(void *host, TPluginTag tag, char *text);
 extern "C" void host_midi_out(void *host, TPluginTag tag, unsigned char status,
                               unsigned char data1, unsigned char data2,
                               unsigned char port);
-extern "C" void host_midi_out_del(void *host, TPluginTag tag, unsigned char
-        status, unsigned char data1, unsigned char data2, unsigned char port);
+extern "C" void host_midi_out_del(void *host, TPluginTag tag,
+                                  unsigned char status, unsigned char data1,
+                                  unsigned char data2, unsigned char port);
 extern "C" void host_loop_out(void *host, TPluginTag tag, intptr_t msg);
 extern "C" void host_loop_kill(void *host, TPluginTag tag, intptr_t msg);
 extern "C" void host_lock_mix(void *host);
@@ -133,7 +136,16 @@ extern "C" void host_lock_plugin(void *host, TPluginTag tag);
 extern "C" void host_unlock_plugin(void *host, TPluginTag tag);
 extern "C" void host_suspend_out(void *host);
 extern "C" void host_resume_out(void *host);
+extern "C" TIOBuffer host_get_input_buf(void *host, TPluginTag tag,
+                                        intptr_t offset);
+extern "C" TIOBuffer host_get_output_buf(void *host, TPluginTag tag,
+                                         intptr_t offset);
+extern "C" void *host_get_insert_buf(void *host, TPluginTag tag,
+                                     intptr_t offset);
+extern "C" void *host_get_mix_buf(void *host, intptr_t offset);
+extern "C" void *host_get_send_buf(void *host, intptr_t offset);
 
+// Host voice-related
 extern "C" void host_release_voice(void *host, intptr_t tag);
 extern "C" void host_kill_voice(void *host, intptr_t tag);
 extern "C" intptr_t host_on_voice_event(void *host, intptr_t tag,

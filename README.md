@@ -21,8 +21,8 @@ cargo build --release --example simple
 To install it:
 
 ```
-./install.mac.sh simple Simple # for macOS
-./install.win.bat simple Simple # for Windows
+./install.mac.sh simple Simple -g # for macOS
+./install.win.bat simple Simple -g # for Windows
 ```
 
 Check out the corresponding script for your system for usage notes.

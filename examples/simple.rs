@@ -146,11 +146,11 @@ impl Plugin for Simple {
         InfoBuilder::new_full_gen("Simple", "Simple", self.param_names.len() as u32)
             // InfoBuilder::new_effect("Simple", "Simple", self.param_names.len() as u32)
             // .want_new_tick()
+            .with_out_voices(1)
+            .loop_out()
             // Looks like MIDI out doesn't work :(
             // https://forum.image-line.com/viewtopic.php?f=100&t=199371
             // https://forum.image-line.com/viewtopic.php?f=100&t=199258
-            .with_out_voices(1)
-            .loop_out()
             .midi_out()
             .build()
     }
@@ -244,7 +244,7 @@ impl Plugin for Simple {
         trace!("{} idle", self.tag);
     }
 
-    // looks like doesn't work
+    // looks like it doesn't work in SDK
     fn loop_in(&mut self, message: ValuePtr) {
         trace!("{} loop_in", message.get::<String>());
     }

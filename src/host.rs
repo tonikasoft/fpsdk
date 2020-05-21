@@ -2,6 +2,7 @@
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::os::raw::{c_char, c_int, c_uchar};
+use std::slice;
 use std::sync::atomic::AtomicPtr;
 use std::sync::{Arc, Mutex};
 
@@ -13,17 +14,6 @@ use crate::{
     ffi, intptr_t, AsRawPtr, FromRawPtr, MidiMessage, ProcessModeFlags, TimeSignature, Transport,
     ValuePtr, WAVETABLE_SIZE,
 };
-
-/// [`Host::in_buf`](struct.Host.html#method.in_buf) flag, which is added before adding to the
-/// buffer.
-pub const IO_LOCK: i32 = 0;
-
-/// [`Host::in_buf`](struct.Host.html#method.in_buf) flag, which is added after adding to the
-/// buffer.
-pub const IO_UNLOCK: i32 = 1;
-
-/// [`Host::out_buf`](struct.Host.html#method.out_buf) flag, which tells if the buffer is filled.
-pub const IO_FILLED: i32 = 1;
 
 /// Plugin host.
 #[derive(Debug)]
@@ -151,11 +141,11 @@ impl Host {
     }
 
     /// **MAY NOT WORK**
-    /// 
-    /// Ask for a message to be dispatched to itself when the current mixing tick will be played
-    /// (to synchronize stuff) 
     ///
-    /// (see [`Plugin::loop_in`](../plugin/trait.Plugin.html#method.loop_in)). 
+    /// Ask for a message to be dispatched to itself when the current mixing tick will be played
+    /// (to synchronize stuff).
+    ///
+    /// See [`Plugin::loop_in`](../plugin/trait.Plugin.html#method.loop_in).
     ///
     /// The message is guaranteed to be dispatched, however it could be sent immediately if it
     /// couldn't be buffered (it's only buffered when playing).
@@ -176,24 +166,24 @@ impl Host {
         unsafe { host_lock_mix(*self.host_ptr.get_mut()) };
     }
 
-    /// Unlocks the mix thread if it was previously locked with.
-    /// [`Host::lock_mix`](struct.Host.html#method.lock_mix)
+    /// Unlocks the mix thread if it was previously locked with
+    /// [`Host::lock_mix`](struct.Host.html#method.lock_mix).
     pub fn unlock_mix(&mut self) {
         unsafe { host_unlock_mix(*self.host_ptr.get_mut()) };
-    } 
+    }
 
     /// **Warning: this function is not very performant, so avoid using it if possible.**
-    /// 
-    /// This is an alternative to [`Host::lock_mix`](struct.Host.html#method.lock_mix). 
-    /// It won't freeze the audio. This function can only be called from the GUI thread! 
+    ///
+    /// This is an alternative to [`Host::lock_mix`](struct.Host.html#method.lock_mix).
+    /// It won't freeze the audio. This function can only be called from the GUI thread!
     pub fn lock_plugin(&mut self, tag: plugin::Tag) {
         unsafe { host_lock_plugin(*self.host_ptr.get_mut(), tag.0) };
-    } 
+    }
 
     /// **Warning: this function is not very performant, so avoid using it if possible.**
-    /// 
+    ///
     /// Unlocks the mix thread if it was previously locked with
-    /// [`Host::lock_plugin`](struct.Host.html#method.lock_plugin). 
+    /// [`Host::lock_plugin`](struct.Host.html#method.lock_plugin).
     pub fn unlock_plugin(&mut self, tag: plugin::Tag) {
         unsafe { host_unlock_plugin(*self.host_ptr.get_mut(), tag.0) };
     }
@@ -212,6 +202,87 @@ impl Host {
         unsafe { host_resume_out(*self.host_ptr.get_mut()) };
     }
 
+    /// Get one of the buffers.
+    ///
+    /// - `kind` the kind of the buffer you want to get (see [`Buffer`](../enum.Buffer.html)).
+    /// - `length` is the buffer length (use the length of the output buffer passed to the render
+    ///   function).
+    ///
+    /// The buffers are valid only during
+    /// [`Plugin::render`](../plugin/trait.Plugin.html#method.render) (i.e. it's supposed to be
+    /// used inside this method only).
+    pub fn buffer(
+        &mut self,
+        tag: plugin::Tag,
+        kind: Buffer,
+        length: usize,
+    ) -> Option<&mut [[f32; 2]]> {
+        match kind {
+            Buffer::InputRead(value) => self.input_buf(tag, value, length),
+            Buffer::OutputWrite(value) => self.output_buf(tag, value, length),
+            Buffer::InsertWrite(value) => self.insert_buf(tag, value, length),
+            Buffer::MixWrite(value) => self.mix_buf(value, length),
+            Buffer::SendWrite(value) => self.send_buf(value, length),
+        }
+    }
+
+    fn input_buf(
+        &mut self,
+        tag: plugin::Tag,
+        offset: usize,
+        length: usize,
+    ) -> Option<&mut [[f32; 2]]> {
+        let in_buf =
+            unsafe { host_get_input_buf(*self.host_ptr.get_mut(), tag.0, offset as intptr_t) };
+        if in_buf.flags == 0 || length == 0 {
+            return None;
+        }
+        Some(unsafe { slice::from_raw_parts_mut(in_buf.buffer as *mut [f32; 2], length) })
+    }
+
+    fn output_buf(
+        &mut self,
+        tag: plugin::Tag,
+        offset: usize,
+        length: usize,
+    ) -> Option<&mut [[f32; 2]]> {
+        let out_buf =
+            unsafe { host_get_output_buf(*self.host_ptr.get_mut(), tag.0, offset as intptr_t) };
+        if out_buf.flags == 0 || length == 0 {
+            return None;
+        }
+        Some(unsafe { slice::from_raw_parts_mut(out_buf.buffer as *mut [f32; 2], length) })
+    }
+
+    fn insert_buf(
+        &mut self,
+        tag: plugin::Tag,
+        offset: isize,
+        length: usize,
+    ) -> Option<&mut [[f32; 2]]> {
+        let insert_buf = unsafe { host_get_insert_buf(*self.host_ptr.get_mut(), tag.0, offset) };
+        if insert_buf.is_null() || length == 0 {
+            return None;
+        }
+        Some(unsafe { slice::from_raw_parts_mut(insert_buf as *mut [f32; 2], length) })
+    }
+
+    fn mix_buf(&mut self, offset: isize, length: usize) -> Option<&mut [[f32; 2]]> {
+        let mix_buf = unsafe { host_get_mix_buf(*self.host_ptr.get_mut(), offset) };
+        if mix_buf.is_null() || length == 0 {
+            return None;
+        }
+        Some(unsafe { slice::from_raw_parts_mut(mix_buf as *mut [f32; 2], length) })
+    }
+
+    fn send_buf(&mut self, index: usize, length: usize) -> Option<&mut [[f32; 2]]> {
+        let mix_buf = unsafe { host_get_send_buf(*self.host_ptr.get_mut(), index as intptr_t) };
+        if mix_buf.is_null() || length == 0 {
+            return None;
+        }
+        Some(unsafe { slice::from_raw_parts_mut(mix_buf as *mut [f32; 2], length) })
+    }
+
     /// Get [`Voicer`](struct.Voicer.html)
     pub fn voice_handler(&self) -> Arc<Mutex<Voicer>> {
         Arc::clone(&self.voicer)
@@ -221,6 +292,46 @@ impl Host {
     pub fn out_voice_handler(&self) -> Arc<Mutex<OutVoicer>> {
         Arc::clone(&self.out_voicer)
     }
+}
+
+/// Type of the write-only buffer you want to get, using
+/// [`Host::buf_write`](../struct.Host.html#method.buf_write).
+#[derive(Debug)]
+pub enum Buffer {
+    /// Multi input buffer for effects.
+    ///
+    /// The value is the buffer index.
+    ///
+    /// **Warning: Index starts at 1, to be compatible with
+    /// [`Buffer::Insert`](enum.Buffer#variant.Insert) (index 0 would be render's function own
+    /// buffer).**
+    InputRead(usize),
+    /// Multi output buffer for generators and effects.
+    ///
+    /// The value is the buffer index.
+    ///
+    /// **Warning: Index starts at 1, to be compatible with
+    /// [`WriteBuffer::Insert`](../enum.WriteBuffer#variant.Insert) (index 0 would be render's
+    /// function own buffer).**
+    OutputWrite(usize),
+    /// The insert buffer following the buffer a generator is currently processing in. This type is
+    /// reserved for the Fruity wrapper (so it may change in the future).
+    ///
+    /// The value is offset to the current buffer. 0 means the same buffer as passed to
+    /// [`Plugin::render`](../plugin/trait.Plugin.html#method.render), 1 means next insert track.
+    InsertWrite(isize),
+    /// Mixer track buffer relative to the current generator's track.
+    ///
+    /// The value is track index offset relative to the current generator's track index (i.e.
+    /// value of 0 returns the current output buffer).
+    ///
+    /// Valid only for generators.
+    MixWrite(isize),
+    /// The send buffer (see
+    /// [`host::Message::SetNumSends`](../enum.Message.html#variant.SetNumSends)).
+    ///
+    /// The value is the index of the send buffer.
+    SendWrite(usize),
 }
 
 extern "C" {
@@ -250,6 +361,17 @@ extern "C" {
     fn host_unlock_plugin(host: *mut c_void, tag: intptr_t);
     fn host_suspend_out(host: *mut c_void);
     fn host_resume_out(host: *mut c_void);
+    fn host_get_input_buf(host: *mut c_void, tag: intptr_t, offset: intptr_t) -> TIOBuffer;
+    fn host_get_output_buf(host: *mut c_void, tag: intptr_t, offset: intptr_t) -> TIOBuffer;
+    fn host_get_insert_buf(host: *mut c_void, tag: intptr_t, offset: intptr_t) -> *mut c_void;
+    fn host_get_mix_buf(host: *mut c_void, offset: intptr_t) -> *mut c_void;
+    fn host_get_send_buf(host: *mut c_void, offset: intptr_t) -> *mut c_void;
+}
+
+#[repr(C)]
+struct TIOBuffer {
+    buffer: *mut c_void,
+    flags: u32,
 }
 
 /// Use this to manually release, kill and notify voices about events.
@@ -494,18 +616,18 @@ pub enum Message<'a> {
     /// This is called to let the plugin tell the host which files need to be collected or put in
     /// zip files.
     ///
-    /// The value holds the file #, which starts at 0
+    /// The value holds the file index, which starts at 0.
     ///
     /// The name of the file is passed to the host as a `String` in the result of the
     /// dispatcher function. The host keeps calling this until the plugin returns zero.
     CollectFile(usize),
     /// (private message to known plugins, ignore) tells the plugin to update a specific,
-    /// non-automated param
+    /// non-automated param.
     SetInternalParam,
     /// This tells the plugin how many send tracks there are (fixed to 4, but could be set by the
-    /// user at any time in a future update)
+    /// user at any time in a future update).
     ///
-    /// The value holds the number of send tracks
+    /// The value holds the number of send tracks.
     SetNumSends(u64),
     /// Called when a file has been dropped onto the parent channel's button.
     ///
