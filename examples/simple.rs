@@ -13,7 +13,7 @@ use simple_logging;
 #[cfg(unix)]
 use simplelog::{ConfigBuilder, WriteLogger};
 
-use fpsdk::host::{self, Event, GetName, Host, OutVoicer, Voicer};
+use fpsdk::host::{self, prompt::PromptBuilder, Event, GetName, Host, OutVoicer, Voicer};
 use fpsdk::plugin::message;
 use fpsdk::plugin::{self, Info, InfoBuilder, Plugin, StateReader, StateWriter};
 use fpsdk::voice::{self, ReceiveVoiceHandler, SendVoiceHandler, Voice};
@@ -41,7 +41,188 @@ struct State {
     _param_2: i64,
 }
 
+impl Plugin for Simple {
+    fn new(host: Host, tag: plugin::Tag) -> Self {
+        init_log();
+
+        info!("init plugin with tag {}", tag);
+
+        let voice_h = host.voice_handler();
+        let out_voice_h = host.out_voice_handler();
+
+        Self {
+            voice_handler: SimpleVoiceHandler::new(voice_h, out_voice_h),
+            host,
+            tag,
+            param_names: vec![
+                "Parameter 1".into(),
+                "Parameter 2".into(),
+                "Parameter 3".into(),
+            ],
+            state: Default::default(),
+        }
+    }
+
+    fn info(&self) -> Info {
+        info!("plugin {} will return info", self.tag);
+
+        InfoBuilder::new_full_gen("Simple", "Simple", self.param_names.len() as u32)
+            // InfoBuilder::new_effect("Simple", "Simple", self.param_names.len() as u32)
+            // .want_new_tick()
+            .with_out_voices(1)
+            .loop_out()
+            // Looks like MIDI out doesn't work :(
+            // https://forum.image-line.com/viewtopic.php?f=100&t=199371
+            // https://forum.image-line.com/viewtopic.php?f=100&t=199258
+            .midi_out()
+            .build()
+    }
+
+    fn save_state(&mut self, writer: StateWriter) {
+        let now = SystemTime::now();
+        let time = now.duration_since(UNIX_EPOCH).expect("").as_secs();
+        self.state._time = time;
+        self.state._param_1 = time as f64 * 0.001;
+        self.state._param_2 = time as i64 / 2;
+        match bincode::serialize_into(writer, &self.state) {
+            Ok(_) => info!("state {:?} saved", self.state),
+            Err(e) => error!("error serializing state {}", e),
+        }
+    }
+
+    fn load_state(&mut self, mut reader: StateReader) {
+        let mut buf = [0; std::mem::size_of::<State>()];
+        reader
+            .read(&mut buf)
+            .and_then(|_| {
+                bincode::deserialize::<State>(&buf).map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("error deserializing value {}", e),
+                    )
+                })
+            })
+            .and_then(|value| {
+                self.state = value;
+                Ok(info!("read state {:?}", self.state))
+            })
+            .unwrap_or_else(|e| error!("error reading value from state {}", e));
+    }
+
+    fn on_message(&mut self, message: host::Message) -> Box<dyn AsRawPtr> {
+        self.host.on_message(
+            self.tag,
+            message::DebugLogMsg(format!("{} got message from host: {:?}", self.tag, message)),
+        );
+
+        if let host::Message::SetEnabled(enabled) = message {
+            self.on_set_enabled(enabled, message);
+        }
+
+        // self.host.midi_out(self.tag, MidiMessage {
+        // status: 0x90,
+        // data1: 60,
+        // data2: 100,
+        // port: 2,
+        // });
+
+        Box::new(0)
+    }
+
+    fn name_of(&self, message: GetName) -> String {
+        info!("{} host asks name of {:?}", self.tag, message);
+
+        match message {
+            GetName::Param(index) => self.param_names[index].clone(),
+            _ => "What?".into(),
+        }
+    }
+
+    fn process_event(&mut self, event: Event) {
+        info!("{} host sends event {:?}", self.tag, event);
+    }
+
+    fn tick(&mut self) {
+        trace!("{} receive new tick", self.tag);
+    }
+
+    fn idle(&mut self) {
+        trace!("{} idle", self.tag);
+    }
+
+    // looks like it doesn't work in SDK
+    fn loop_in(&mut self, message: ValuePtr) {
+        trace!("{} loop_in", message.get::<String>());
+    }
+
+    fn process_param(
+        &mut self,
+        index: usize,
+        value: ValuePtr,
+        flags: ProcessParamFlags,
+    ) -> Box<dyn AsRawPtr> {
+        info!(
+            "{} process param: index {}, value {}, flags {:?}",
+            self.tag,
+            index,
+            value.get::<f32>(),
+            flags
+        );
+        Box::new(0)
+    }
+
+    fn midi_in(&mut self, message: MidiMessage) {
+        trace!("receive MIDI message {:?}", message);
+    }
+
+    fn render(&mut self, input: &[[f32; 2]], output: &mut [[f32; 2]]) {
+        if self.voice_handler.voices.len() < 1 {
+            // consider it an effect
+            input.iter().zip(output).for_each(|(inp, outp)| {
+                outp[0] = inp[0] * 0.25;
+                outp[1] = inp[1] * 0.25;
+            });
+        }
+    }
+
+    fn voice_handler(&mut self) -> Option<&mut dyn ReceiveVoiceHandler> {
+        Some(&mut self.voice_handler)
+    }
+}
+
 impl Simple {
+    fn on_set_enabled(&mut self, enabled: bool, message: host::Message) {
+        self.add_notes();
+        self.log_selection();
+        self.say_hello_hint();
+
+        if enabled {
+            self.on_enabled(message);
+        }
+
+        self.host.on_parameter(
+            self.tag,
+            0,
+            ValuePtr::from_raw_ptr(0.123456789_f32.as_raw_ptr()),
+        );
+    }
+
+    fn on_enabled(&mut self, message: host::Message) {
+        self.show_annoying_message();
+        if let Some(prompt) = PromptBuilder::default()
+            .with_color()
+            .show(&mut self.host, "Hello".to_string())
+        {
+            info!("prompt value is {}", prompt.value);
+            info!("prompt color is {:06x}", prompt.color.unwrap());
+        };
+        // self.host.on_message(self.tag, message::ActivateMidi);
+        self.host.loop_out(
+            self.tag,
+            ValuePtr::from_raw_ptr(format!("{:?}", message).as_raw_ptr()),
+        );
+    }
+
     fn add_notes(&mut self) {
         let notes = Notes {
             notes: vec![
@@ -115,172 +296,6 @@ impl Simple {
 
     fn say_hello_hint(&mut self) {
         self.host.on_hint(self.tag, "^c Hello".to_string());
-    }
-}
-
-impl Plugin for Simple {
-    fn new(host: Host, tag: plugin::Tag) -> Self {
-        init_log();
-
-        info!("init plugin with tag {}", tag);
-
-        let voice_h = host.voice_handler();
-        let out_voice_h = host.out_voice_handler();
-
-        Self {
-            voice_handler: SimpleVoiceHandler::new(voice_h, out_voice_h),
-            host,
-            tag,
-            param_names: vec![
-                "Parameter 1".into(),
-                "Parameter 2".into(),
-                "Parameter 3".into(),
-            ],
-            state: Default::default(),
-        }
-    }
-
-    fn info(&self) -> Info {
-        info!("plugin {} will return info", self.tag);
-
-        InfoBuilder::new_full_gen("Simple", "Simple", self.param_names.len() as u32)
-            // InfoBuilder::new_effect("Simple", "Simple", self.param_names.len() as u32)
-            // .want_new_tick()
-            .with_out_voices(1)
-            .loop_out()
-            // Looks like MIDI out doesn't work :(
-            // https://forum.image-line.com/viewtopic.php?f=100&t=199371
-            // https://forum.image-line.com/viewtopic.php?f=100&t=199258
-            .midi_out()
-            .build()
-    }
-
-    fn save_state(&mut self, writer: StateWriter) {
-        let now = SystemTime::now();
-        let time = now.duration_since(UNIX_EPOCH).expect("").as_secs();
-        self.state._time = time;
-        self.state._param_1 = time as f64 * 0.001;
-        self.state._param_2 = time as i64 / 2;
-        match bincode::serialize_into(writer, &self.state) {
-            Ok(_) => info!("state {:?} saved", self.state),
-            Err(e) => error!("error serializing state {}", e),
-        }
-    }
-
-    fn load_state(&mut self, mut reader: StateReader) {
-        let mut buf = [0; std::mem::size_of::<State>()];
-        reader
-            .read(&mut buf)
-            .and_then(|_| {
-                bincode::deserialize::<State>(&buf).map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("error deserializing value {}", e),
-                    )
-                })
-            })
-            .and_then(|value| {
-                self.state = value;
-                Ok(info!("read state {:?}", self.state))
-            })
-            .unwrap_or_else(|e| error!("error reading value from state {}", e));
-    }
-    
-    fn on_message(&mut self, message: host::Message) -> Box<dyn AsRawPtr> {
-        self.host.on_message(
-            self.tag,
-            message::DebugLogMsg(format!("{} got message from host: {:?}", self.tag, message)),
-        );
-
-        if let host::Message::SetEnabled(enabled) = message {
-            self.add_notes();
-            self.log_selection();
-            self.say_hello_hint();
-
-            if enabled {
-                self.show_annoying_message();
-                // self.host.on_message(self.tag, message::ActivateMidi);
-                self.host.loop_out(
-                    self.tag,
-                    ValuePtr::from_raw_ptr(format!("{:?}", message).as_raw_ptr()),
-                );
-            }
-
-            self.host.on_parameter(
-                self.tag,
-                0,
-                ValuePtr::from_raw_ptr(0.123456789_f32.as_raw_ptr()),
-            );
-        }
-
-        // self.host.midi_out(self.tag, MidiMessage {
-        // status: 0x90,
-        // data1: 60,
-        // data2: 100,
-        // port: 2,
-        // });
-
-        Box::new(0)
-    }
-
-    fn name_of(&self, message: GetName) -> String {
-        info!("{} host asks name of {:?}", self.tag, message);
-
-        match message {
-            GetName::Param(index) => self.param_names[index].clone(),
-            _ => "What?".into(),
-        }
-    }
-
-    fn process_event(&mut self, event: Event) {
-        info!("{} host sends event {:?}", self.tag, event);
-    }
-
-    fn tick(&mut self) {
-        trace!("{} receive new tick", self.tag);
-    }
-
-    fn idle(&mut self) {
-        trace!("{} idle", self.tag);
-    }
-
-    // looks like it doesn't work in SDK
-    fn loop_in(&mut self, message: ValuePtr) {
-        trace!("{} loop_in", message.get::<String>());
-    }
-
-    fn process_param(
-        &mut self,
-        index: usize,
-        value: ValuePtr,
-        flags: ProcessParamFlags,
-    ) -> Box<dyn AsRawPtr> {
-        info!(
-            "{} process param: index {}, value {}, flags {:?}",
-            self.tag,
-            index,
-            value.get::<f32>(),
-            flags
-        );
-        Box::new(0)
-    }
-
-    fn midi_in(&mut self, message: MidiMessage) {
-        trace!("receive MIDI message {:?}", message);
-    }
-
-    fn render(&mut self, input: &[[f32; 2]], output: &mut [[f32; 2]]) {
-        if self.voice_handler.voices.len() < 1 {
-            // consider it an effect
-            input.iter().zip(output).for_each(|(inp, outp)| {
-                outp[0] = inp[0] * 0.25;
-                outp[1] = inp[1] * 0.25;
-            });
-        }
-    }
-
-    fn voice_handler(&mut self) -> Option<&mut dyn ReceiveVoiceHandler> {
-        Some(&mut self.voice_handler)
     }
 }
 

@@ -145,6 +145,9 @@ extern "C" void *host_get_insert_buf(void *host, TPluginTag tag,
 extern "C" void *host_get_mix_buf(void *host, intptr_t offset);
 extern "C" void *host_get_send_buf(void *host, intptr_t offset);
 
+extern "C" bool prompt_show(void *host, int x, int y, char *msg, char *result,
+                            int &color);
+
 // Host voice-related
 extern "C" void host_release_voice(void *host, intptr_t tag);
 extern "C" void host_kill_voice(void *host, intptr_t tag);

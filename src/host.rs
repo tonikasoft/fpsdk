@@ -1,4 +1,6 @@
 //! Plugin's host (FL Studio).
+pub mod prompt;
+
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::os::raw::{c_char, c_int, c_uchar};
@@ -54,9 +56,9 @@ impl Host {
     /// whenever a parameter is changed from within your plugin (probably because the user turned a
     /// wheel or something).
     ///
-    /// - tag - plugin's tag.
-    /// - index - the parameter index
-    /// - value - the new parameter value.
+    /// - `tag` - plugin's tag.
+    /// - `index` - the parameter index
+    /// - `value` - the new parameter value.
     pub fn on_parameter(&mut self, tag: plugin::Tag, index: usize, value: ValuePtr) {
         unsafe {
             host_on_parameter(
@@ -70,25 +72,25 @@ impl Host {
 
     /// Let the host show a hint, as specified by the parameters.
     ///
-    /// - tag - the plugin's tag
-    /// - text - the text to show as a hint
+    /// - `tag` - the plugin's tag
+    /// - `text` - the text to show as a hint
     ///
     /// There is one extra feature of parameter hints. It is possible to tell FL Studio to show
     /// little icons next to the hint, that have a special meaning. For the moment there are three
     /// of those. Note that these have to be inserted at the BEGINNING of the string.
     ///
-    /// - "^a" - shows a little icon that informs the user that the parameter that the hint is
+    /// - `"^a"` - shows a little icon that informs the user that the parameter that the hint is
     /// about can be linked to a MIDI controller.
-    /// - "^b" - informs the user that the parameter is recordable.
-    /// - "^c" - shows a little smiley. No real use, just for fun.
-    /// - "^d" - shows a mouse with the right button clicked, to denote a control that has a popup
+    /// - `"^b"` - informs the user that the parameter is recordable.
+    /// - `"^c"` - shows a little smiley. No real use, just for fun.
+    /// - `"^d"` - shows a mouse with the right button clicked, to denote a control that has a popup
     /// menu.
-    /// - "^e" - shows an unhappy smiley, to use when something went wrong.
-    /// - "^f" - shows a left-pointing arrow
-    /// - "^g" - shows a double right-pointing arrow, for fast forward
-    /// - "^h" - is an exclamation mark, for a warning to the user
-    /// - "^i" - is an hourglass
-    /// - "^j" - shows a double left-pointing arrow, for fast reverse
+    /// - `"^e"` - shows an unhappy smiley, to use when something went wrong.
+    /// - `"^f"` - shows a left-pointing arrow
+    /// - `"^g"` - shows a double right-pointing arrow, for fast forward
+    /// - `"^h"` - is an exclamation mark, for a warning to the user
+    /// - `"^i"` - is an hourglass
+    /// - `"^j"` - shows a double left-pointing arrow, for fast reverse
     pub fn on_hint(&mut self, tag: plugin::Tag, text: String) {
         unsafe {
             host_on_hint(

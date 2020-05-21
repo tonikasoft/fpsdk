@@ -340,6 +340,12 @@ void *host_get_send_buf(void *host, intptr_t offset) {
     return ((TFruityPlugHost *)host)->GetSendBuffer(offset);
 }
 
+bool prompt_show(void *host, int x, int y, char *msg, char *result,
+                 int &color) {
+
+    return ((TFruityPlugHost *)host)->PromptEdit(x, y, msg, result, color);
+}
+
 // Host voice-related
 
 intptr_t host_on_voice_event(void *host, intptr_t tag, Message message) {
