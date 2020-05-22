@@ -4,7 +4,7 @@ pub mod message;
 
 use std::ffi::CString;
 use std::io::{self, Read, Write};
-use std::os::raw::{c_char, c_void};
+use std::os::raw::{c_char, c_int, c_void};
 use std::panic::RefUnwindSafe;
 
 use hresult::HRESULT;
@@ -13,7 +13,7 @@ use log::{debug, error};
 use crate::host::{self, Event, GetName, Host};
 use crate::voice::ReceiveVoiceHandler;
 use crate::{
-    alloc_real_cstr, ffi, intptr_t, AsRawPtr, MidiMessage, ProcessParamFlags, ValuePtr,
+    alloc_real_cstr, FlMessage, intptr_t, AsRawPtr, MidiMessage, ProcessParamFlags, ValuePtr,
     CURRENT_SDK_VERSION,
 };
 
@@ -450,7 +450,7 @@ pub struct PluginAdapter(pub Box<dyn Plugin>);
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn plugin_info(adapter: *mut PluginAdapter) -> *mut Info {
+unsafe extern "C" fn plugin_info(adapter: *mut PluginAdapter) -> *mut Info {
     Box::into_raw(Box::new((*adapter).0.info()))
 }
 
@@ -463,9 +463,9 @@ pub unsafe extern "C" fn plugin_info(adapter: *mut PluginAdapter) -> *mut Info {
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn plugin_dispatcher(
+unsafe extern "C" fn plugin_dispatcher(
     adapter: *mut PluginAdapter,
-    message: ffi::Message,
+    message: FlMessage,
 ) -> intptr_t {
     (*adapter).0.on_message(message.into()).as_raw_ptr()
 }
@@ -479,9 +479,9 @@ pub unsafe extern "C" fn plugin_dispatcher(
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn plugin_name_of(
+unsafe extern "C" fn plugin_name_of(
     adapter: *const PluginAdapter,
-    message: ffi::Message,
+    message: FlMessage,
 ) -> *mut c_char {
     let name = CString::new((*adapter).0.name_of(message.into())).unwrap_or_else(|e| {
         error!("{}", e);
@@ -499,9 +499,9 @@ pub unsafe extern "C" fn plugin_name_of(
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn plugin_process_event(
+unsafe extern "C" fn plugin_process_event(
     adapter: *mut PluginAdapter,
-    event: ffi::Message,
+    event: FlMessage,
 ) -> intptr_t {
     (*adapter).0.process_event(event.into());
     0
@@ -516,9 +516,9 @@ pub unsafe extern "C" fn plugin_process_event(
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn plugin_process_param(
+unsafe extern "C" fn plugin_process_param(
     adapter: *mut PluginAdapter,
-    message: ffi::Message,
+    message: FlMessage,
 ) -> intptr_t {
     (*adapter)
         .0
@@ -539,7 +539,7 @@ pub unsafe extern "C" fn plugin_process_param(
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn plugin_idle(adapter: *mut PluginAdapter) {
+unsafe extern "C" fn plugin_idle(adapter: *mut PluginAdapter) {
     (*adapter).0.idle();
 }
 
@@ -552,7 +552,7 @@ pub unsafe extern "C" fn plugin_idle(adapter: *mut PluginAdapter) {
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn plugin_tick(adapter: *mut PluginAdapter) {
+unsafe extern "C" fn plugin_tick(adapter: *mut PluginAdapter) {
     (*adapter).0.tick();
 }
 
@@ -565,7 +565,7 @@ pub unsafe extern "C" fn plugin_tick(adapter: *mut PluginAdapter) {
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn plugin_midi_tick(adapter: *mut PluginAdapter) {
+unsafe extern "C" fn plugin_midi_tick(adapter: *mut PluginAdapter) {
     (*adapter).0.midi_tick();
 }
 
@@ -578,7 +578,7 @@ pub unsafe extern "C" fn plugin_midi_tick(adapter: *mut PluginAdapter) {
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn plugin_eff_render(
+unsafe extern "C" fn plugin_eff_render(
     adapter: *mut PluginAdapter,
     source: *const [f32; 2],
     dest: *mut [f32; 2],
@@ -598,7 +598,7 @@ pub unsafe extern "C" fn plugin_eff_render(
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn plugin_gen_render(
+unsafe extern "C" fn plugin_gen_render(
     adapter: *mut PluginAdapter,
     dest: *mut [f32; 2],
     length: i32,
@@ -616,8 +616,8 @@ pub unsafe extern "C" fn plugin_gen_render(
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn plugin_midi_in(adapter: *mut PluginAdapter, message: MidiMessage) {
-    (*adapter).0.midi_in(message);
+unsafe extern "C" fn plugin_midi_in(adapter: *mut PluginAdapter, message: &mut c_int) {
+    (*adapter).0.midi_in(message.into());
 }
 
 /// [`Plugin::save_state`](trait.Plugin.html#tymethod.save_state) FFI.
@@ -629,7 +629,7 @@ pub unsafe extern "C" fn plugin_midi_in(adapter: *mut PluginAdapter, message: Mi
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn plugin_save_state(adapter: *mut PluginAdapter, stream: *mut c_void) {
+unsafe extern "C" fn plugin_save_state(adapter: *mut PluginAdapter, stream: *mut c_void) {
     (*adapter).0.save_state(StateWriter(stream));
 }
 
@@ -642,7 +642,7 @@ pub unsafe extern "C" fn plugin_save_state(adapter: *mut PluginAdapter, stream: 
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn plugin_load_state(adapter: *mut PluginAdapter, stream: *mut c_void) {
+unsafe extern "C" fn plugin_load_state(adapter: *mut PluginAdapter, stream: *mut c_void) {
     (*adapter).0.load_state(StateReader(stream));
 }
 
@@ -655,6 +655,6 @@ pub unsafe extern "C" fn plugin_load_state(adapter: *mut PluginAdapter, stream: 
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn plugin_loop_in(adapter: *mut PluginAdapter, message: intptr_t) {
+unsafe extern "C" fn plugin_loop_in(adapter: *mut PluginAdapter, message: intptr_t) {
     (*adapter).0.loop_in(ValuePtr(message));
 }

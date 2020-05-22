@@ -48,64 +48,16 @@
     unreachable_pub
 )]
 
-/// Used internally for C++ <-> Rust interoperability. Shouldn't be used directly.
-#[doc(hidden)]
-#[cxx::bridge]
-pub mod ffi {
-    /// Time signature.
-    pub struct TimeSignature {
-        /// Steps per bar.
-        pub steps_per_bar: u32,
-        /// Steps per beat.
-        pub steps_per_beat: u32,
-        /// Pulses per quarter note.
-        pub ppq: u32,
-    }
-
-    /// MIDI message.
-    pub struct MidiMessage {
-        pub status: u8,
-        pub data1: u8,
-        pub data2: u8,
-        pub port: u8,
-    }
-
-    #[derive(Clone)]
-    pub struct Message {
-        pub id: isize,
-        pub index: isize,
-        pub value: isize,
-    }
-
-    extern "C" {
-        include!("wrapper.h");
-
-        pub fn time_sig_from_raw(raw_time_sig: isize) -> TimeSignature;
-    }
-
-    extern "Rust" {
-        type PluginAdapter;
-
-        fn fplog(message: &str);
-        // Used for debugging
-        fn print_adapter(adapter: &PluginAdapter);
-    }
-}
-
 pub mod host;
 pub mod plugin;
 pub mod voice;
 
 use std::ffi::{CStr, CString};
-use std::fmt;
 use std::mem;
 use std::os::raw::{c_char, c_int, c_void};
 
 use bitflags::bitflags;
 use log::{debug, error};
-
-pub use ffi::{MidiMessage, TimeSignature};
-use plugin::PluginAdapter;
 
 /// Current FL SDK version.
 pub const CURRENT_SDK_VERSION: u32 = 1;
@@ -142,49 +94,12 @@ macro_rules! implement_tag {
     };
 }
 
-fn fplog(message: &str) {
-    debug!("{}", message);
-}
-
-fn print_adapter(adapter: &PluginAdapter) {
-    debug!("{:?}", adapter);
-}
-
-/// FFI to free rust's Box::into_raw pointer.
-///
-/// It supposed to be used internally. Don't use it.
-///
-/// # Safety
-///
-/// Unsafe
-#[doc(hidden)]
-#[no_mangle]
-pub unsafe extern "C" fn free_rbox_raw(raw_ptr: *mut c_void) {
-    let _ = Box::from_raw(raw_ptr);
-}
-
-/// FFI to free rust's CString pointer.
-///
-/// It supposed to be used internally. Don't use it.
-///
-/// # Safety
-///
-/// Unsafe
-#[doc(hidden)]
-#[no_mangle]
-pub unsafe extern "C" fn free_rstring(raw_str: *mut c_char) {
-    let _ = CString::from_raw(raw_str);
-}
-
-/// FFI to make C string (`char *`) managed by C side. Because `char *` produced by
-/// `CString::into_raw` leads to memory leak:
-///
-/// > The pointer which this function returns must be returned to Rust and reconstituted using
-/// > from_raw to be properly deallocated. Specifically, one should not use the standard C free()
-/// > function to deallocate this string.
-#[no_mangle]
-extern "C" {
-    fn alloc_real_cstr(raw_str: *mut c_char) -> *mut c_char;
+#[derive(Debug, Clone)]
+#[repr(C)]
+struct FlMessage {
+    id: intptr_t,
+    index: intptr_t,
+    value: intptr_t,
 }
 
 /// For types, which can be represented as `intptr_t`.
@@ -242,6 +157,17 @@ impl AsRawPtr for String {
         // alloc_real_cstr prevents memory leak caused by CString::into_raw
         unsafe { alloc_real_cstr(value.into_raw()) as intptr_t }
     }
+}
+
+/// FFI to make C string (`char *`) managed by C side. Because `char *` produced by
+/// `CString::into_raw` leads to memory leak:
+///
+/// > The pointer which this function returns must be returned to Rust and reconstituted using
+/// > from_raw to be properly deallocated. Specifically, one should not use the standard C free()
+/// > function to deallocate this string.
+#[no_mangle]
+extern "C" {
+    fn alloc_real_cstr(raw_str: *mut c_char) -> *mut c_char;
 }
 
 /// For conversion from `intptr_t`.
@@ -316,6 +242,310 @@ impl FromRawPtr for ValuePtr {
     fn from_raw_ptr(value: intptr_t) -> Self {
         ValuePtr(value)
     }
+}
+
+/// Time signature.
+#[derive(Debug, Clone)]
+pub struct TimeSignature {
+    /// Steps per bar.
+    pub steps_per_bar: u32,
+    /// Steps per beat.
+    pub steps_per_beat: u32,
+    /// Pulses per quarter note.
+    pub ppq: u32,
+}
+
+impl From<TTimeSigInfo> for TimeSignature {
+    fn from(value: TTimeSigInfo) -> Self {
+        Self {
+            steps_per_bar: value.steps_per_bar as u32,
+            steps_per_beat: value.steps_per_beat as u32,
+            ppq: value.ppq as u32,
+        }
+    }
+}
+
+#[repr(C)]
+struct TTimeSigInfo {
+    steps_per_bar: c_int,
+    steps_per_beat: c_int,
+    ppq: c_int,
+}
+
+impl FromRawPtr for TTimeSigInfo {
+    fn from_raw_ptr(raw_ptr: intptr_t) -> Self {
+        let sig_ptr = raw_ptr as *mut c_void as *mut TTimeSigInfo;
+        unsafe {
+            Self {
+                steps_per_beat: (*sig_ptr).steps_per_beat,
+                steps_per_bar: (*sig_ptr).steps_per_bar,
+                ppq: (*sig_ptr).ppq,
+            }
+        }
+    }
+}
+
+/// Time format.
+#[derive(Debug)]
+pub enum TimeFormat {
+    /// Beats.
+    Beats,
+    /// Absolute ms.
+    AbsoluteMs,
+    /// Running ms.
+    RunningMs,
+    /// Time since sound card restart (in ms).
+    RestartMs,
+}
+
+impl From<TimeFormat> for u8 {
+    fn from(format: TimeFormat) -> Self {
+        match format {
+            TimeFormat::Beats => 0,
+            TimeFormat::AbsoluteMs => 1,
+            TimeFormat::RunningMs => 2,
+            TimeFormat::RestartMs => 3,
+        }
+    }
+}
+
+/// Time
+///
+/// The first value is mixing time.
+///
+/// The second value is offset in samples.
+#[derive(Debug, Default)]
+#[repr(C)]
+pub struct Time(pub f64, pub f64);
+
+impl FromRawPtr for Time {
+    fn from_raw_ptr(value: intptr_t) -> Self {
+        unsafe { *Box::from_raw(value as *mut c_void as *mut Time) }
+    }
+}
+
+/// Song time in **bar:step:tick** format.
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Default)]
+#[repr(C)]
+pub struct SongTime {
+    pub bar: i32,
+    pub step: i32,
+    pub tick: i32,
+}
+
+impl FromRawPtr for SongTime {
+    fn from_raw_ptr(value: intptr_t) -> Self {
+        unsafe { *Box::from_raw(value as *mut c_void as *mut Self) }
+    }
+}
+
+/// Name of the color (or MIDI channel) in Piano Roll.
+#[derive(Debug)]
+pub struct NameColor {
+    /// User-defined name (can be empty).
+    pub name: String,
+    /// Visible name (can be guessed).
+    pub vis_name: String,
+    /// Color/MIDI channel index.
+    pub color: u8,
+    /// Real index of the item (can be used to translate plugin's own in/out into real mixer track
+    /// number).
+    pub index: usize,
+}
+
+/// Type used in FFI for [`NameColor`](struct.NameColor.html).
+#[repr(C)]
+pub struct TNameColor {
+    name: [u8; 256],
+    vis_name: [u8; 256],
+    color: c_int,
+    index: c_int,
+}
+
+impl From<TNameColor> for NameColor {
+    fn from(name_color: TNameColor) -> Self {
+        Self {
+            name: String::from_utf8_lossy(&name_color.name[..]).to_string(),
+            vis_name: String::from_utf8_lossy(&name_color.vis_name[..]).to_string(),
+            color: name_color.color as u8,
+            index: name_color.index as usize,
+        }
+    }
+}
+
+impl From<NameColor> for TNameColor {
+    fn from(name_color: NameColor) -> Self {
+        let mut name = [0_u8; 256];
+        name.copy_from_slice(name_color.name.as_bytes());
+        let mut vis_name = [0_u8; 256];
+        vis_name.copy_from_slice(name_color.vis_name.as_bytes());
+        Self {
+            name,
+            vis_name,
+            color: name_color.color as c_int,
+            index: name_color.index as c_int,
+        }
+    }
+}
+
+impl FromRawPtr for TNameColor {
+    fn from_raw_ptr(value: intptr_t) -> Self {
+        unsafe { *Box::from_raw(value as *mut Self) }
+    }
+}
+
+/// MIDI message.
+#[derive(Debug)]
+pub struct MidiMessage {
+    /// Status byte.
+    pub status: u8,
+    /// First data byte.
+    pub data1: u8,
+    /// Second data byte.
+    pub data2: u8,
+    /// Port number.
+    pub port: u8,
+}
+
+impl From<&mut c_int> for MidiMessage {
+    fn from(value: &mut c_int) -> Self {
+        Self {
+            status: (*value & 0xff) as u8,
+            data1: ((*value >> 8) & 0xff) as u8,
+            data2: ((*value >> 16) & 0xff) as u8,
+            port: ((*value >> 24) & 0xff) as u8,
+        }
+    }
+}
+
+impl From<c_int> for MidiMessage {
+    fn from(value: c_int) -> Self {
+        Self {
+            status: (value & 0xff) as u8,
+            data1: ((value >> 8) & 0xff) as u8,
+            data2: ((value >> 16) & 0xff) as u8,
+            port: ((value >> 24) & 0xff) as u8,
+        }
+    }
+}
+
+/// Collection of notes, which you can add to the piano roll using
+/// [`Host::on_message`](host/struct.Host.html#on_message.new) with message
+/// [`plugin::Message::AddToPianoRoll`](../plugin/enum.Message.html#variant.AddToPianoRoll).
+#[derive(Debug)]
+pub struct Notes {
+    // 0=step seq (not supported yet), 1=piano roll
+    //target: i32,
+    /// Notes.
+    pub notes: Vec<Note>,
+    /// See [`NotesFlags`](struct.NotesFlags.html).
+    pub flags: NotesFlags,
+    /// Pattern number. `None` for current.
+    pub pattern: Option<u32>,
+    /// Channel number. `None` for plugin's channel, or selected channel if plugin is an effect.
+    pub channel: Option<u32>,
+}
+
+/// This type represents a note in [`Notes`](struct.Notes.html).
+#[derive(Debug)]
+#[repr(C)]
+pub struct Note {
+    /// Position in PPQ.
+    pub position: i32,
+    /// Length in PPQ.
+    pub length: i32,
+    /// Pan in range -100..100.
+    pub pan: i32,
+    /// Volume.
+    pub vol: i32,
+    /// Note number.
+    pub note: i16,
+    /// Color or MIDI channel in range of 0..15.
+    pub color: i16,
+    /// Fine pitch in range -1200..1200.
+    pub pitch: i32,
+    /// Mod X or filter cutoff frequency.
+    pub mod_x: f32,
+    /// Mod Y or filter resonance (Q).
+    pub mod_y: f32,
+}
+
+bitflags! {
+    /// Notes parameters flags
+    pub struct NotesFlags: isize {
+        /// Delete everything currently on the piano roll before adding the notes.
+        const EMPTY_FIRST = 1;
+        /// Put the new notes in the piano roll selection, if there is one.
+        const USE_SELECTION = 2;
+    }
+}
+
+// This type in FL SDK is what we represent as Notes. Here we use it for FFI, to send it to C++.
+#[repr(C)]
+struct TNotesParams {
+    target: c_int,
+    flags: c_int,
+    pat_num: c_int,
+    chan_num: c_int,
+    count: c_int,
+    notes: *mut Note,
+}
+
+impl From<Notes> for TNotesParams {
+    fn from(mut notes: Notes) -> Self {
+        notes.notes.shrink_to_fit();
+        let notes_ptr = notes.notes.as_mut_ptr();
+        let len = notes.notes.len();
+        mem::forget(notes.notes);
+
+        Self {
+            target: 1,
+            flags: notes.flags.bits() as c_int,
+            pat_num: notes.pattern.map(|v| v as c_int).unwrap_or(-1),
+            chan_num: notes.channel.map(|v| v as c_int).unwrap_or(-1),
+            count: len as c_int,
+            notes: notes_ptr,
+        }
+    }
+}
+
+/// Describes an item that should be added to a control's right-click popup menu.
+#[derive(Debug)]
+pub struct ParamMenuEntry {
+    /// Name.
+    pub name: String,
+    /// Flags.
+    pub flags: ParamMenuItemFlags,
+}
+
+bitflags! {
+    /// Parameter popup menu item flags
+    pub struct ParamMenuItemFlags: i32 {
+        /// The item is disabled
+        const DISABLED = 1;
+        /// The item is checked
+        const CHECKED = 2;
+    }
+}
+
+impl ParamMenuEntry {
+    fn from_ffi(ffi_t: *mut TParamMenuEntry) -> Self {
+        Self {
+            name: unsafe { CString::from_raw((*ffi_t).name) }
+                .to_string_lossy()
+                .to_string(),
+            flags: ParamMenuItemFlags::from_bits(unsafe { (*ffi_t).flags })
+                .unwrap_or_else(ParamMenuItemFlags::empty),
+        }
+    }
+}
+
+#[derive(Debug)]
+#[repr(C)]
+struct TParamMenuEntry {
+    name: *mut c_char,
+    flags: c_int,
 }
 
 bitflags! {
@@ -508,8 +738,8 @@ pub enum Transport {
     Unknown,
 }
 
-impl From<ffi::Message> for Transport {
-    fn from(message: ffi::Message) -> Self {
+impl From<FlMessage> for Transport {
+    fn from(message: FlMessage) -> Self {
         match message.index {
             0 => Transport::Jog(Jog(message.value as i64)),
             1 => Transport::Jog2(Jog(message.value as i64)),
@@ -588,140 +818,6 @@ pub struct Hold(pub bool);
 /// Value is an integer increment.
 #[derive(Debug)]
 pub struct Jog(pub i64);
-
-/// Song time in **bar:step:tick** format.
-#[allow(missing_docs)]
-#[derive(Clone, Debug, Default)]
-#[repr(C)]
-pub struct SongTime {
-    pub bar: i32,
-    pub step: i32,
-    pub tick: i32,
-}
-
-impl FromRawPtr for SongTime {
-    fn from_raw_ptr(value: intptr_t) -> Self {
-        unsafe { *Box::from_raw(value as *mut c_void as *mut Self) }
-    }
-}
-
-/// Collection of notes, which you can add to the piano roll using
-/// [`Host::on_message`](host/struct.Host.html#on_message.new) with message
-/// [`plugin::Message::AddToPianoRoll`](../plugin/enum.Message.html#variant.AddToPianoRoll).
-#[derive(Debug)]
-pub struct Notes {
-    // 0=step seq (not supported yet), 1=piano roll
-    //target: i32,
-    /// Notes.
-    pub notes: Vec<Note>,
-    /// See [`NotesFlags`](struct.NotesFlags.html).
-    pub flags: NotesFlags,
-    /// Pattern number. `None` for current.
-    pub pattern: Option<u32>,
-    /// Channel number. `None` for plugin's channel, or selected channel if plugin is an effect.
-    pub channel: Option<u32>,
-}
-
-/// This type represents a note in [`Notes`](struct.Notes.html).
-#[derive(Debug)]
-#[repr(C)]
-pub struct Note {
-    /// Position in PPQ.
-    pub position: i32,
-    /// Length in PPQ.
-    pub length: i32,
-    /// Pan in range -100..100.
-    pub pan: i32,
-    /// Volume.
-    pub vol: i32,
-    /// Note number.
-    pub note: i16,
-    /// Color or MIDI channel in range of 0..15.
-    pub color: i16,
-    /// Fine pitch in range -1200..1200.
-    pub pitch: i32,
-    /// Mod X or filter cutoff frequency.
-    pub mod_x: f32,
-    /// Mod Y or filter resonance (Q).
-    pub mod_y: f32,
-}
-
-bitflags! {
-    /// Notes parameters flags
-    pub struct NotesFlags: isize {
-        /// Delete everything currently on the piano roll before adding the notes.
-        const EMPTY_FIRST = 1;
-        /// Put the new notes in the piano roll selection, if there is one.
-        const USE_SELECTION = 2;
-    }
-}
-
-// This type in FL SDK is what we represent as Notes. Here we use it for FFI, to send it to C++.
-#[repr(C)]
-struct TNotesParams {
-    target: c_int,
-    flags: c_int,
-    pat_num: c_int,
-    chan_num: c_int,
-    count: c_int,
-    notes: *mut Note,
-}
-
-impl From<Notes> for TNotesParams {
-    fn from(mut notes: Notes) -> Self {
-        notes.notes.shrink_to_fit();
-        let notes_ptr = notes.notes.as_mut_ptr();
-        let len = notes.notes.len();
-        mem::forget(notes.notes);
-
-        Self {
-            target: 1,
-            flags: notes.flags.bits() as c_int,
-            pat_num: notes.pattern.map(|v| v as c_int).unwrap_or(-1),
-            chan_num: notes.channel.map(|v| v as c_int).unwrap_or(-1),
-            count: len as c_int,
-            notes: notes_ptr,
-        }
-    }
-}
-
-/// Describes an item that should be added to a control's right-click popup menu.
-#[derive(Debug)]
-pub struct ParamMenuEntry {
-    /// Name.
-    pub name: String,
-    /// Flags.
-    pub flags: ParamMenuItemFlags,
-}
-
-bitflags! {
-    /// Parameter popup menu item flags
-    pub struct ParamMenuItemFlags: i32 {
-        /// The item is disabled
-        const DISABLED = 1;
-        /// The item is checked
-        const CHECKED = 2;
-    }
-}
-
-impl ParamMenuEntry {
-    fn from_ffi(ffi_t: *mut TParamMenuEntry) -> Self {
-        Self {
-            name: unsafe { CString::from_raw((*ffi_t).name) }
-                .to_string_lossy()
-                .to_string(),
-            flags: ParamMenuItemFlags::from_bits(unsafe { (*ffi_t).flags })
-                .unwrap_or_else(ParamMenuItemFlags::empty),
-        }
-    }
-}
-
-#[derive(Debug)]
-#[repr(C)]
-struct TParamMenuEntry {
-    name: *mut c_char,
-    flags: c_int,
-}
 
 bitflags! {
     /// Message box flags (see
@@ -901,138 +997,31 @@ impl FromRawPtr for MessageBoxResult {
     }
 }
 
-/// Time format.
-#[derive(Debug)]
-pub enum TimeFormat {
-    /// Beats.
-    Beats,
-    /// Absolute ms.
-    AbsoluteMs,
-    /// Running ms.
-    RunningMs,
-    /// Time since sound card restart (in ms).
-    RestartMs,
+#[no_mangle]
+unsafe extern "C" fn fplog(message: *const c_char) {
+    debug!("{}", CStr::from_ptr(message).to_string_lossy());
 }
 
-impl From<TimeFormat> for u8 {
-    fn from(format: TimeFormat) -> Self {
-        match format {
-            TimeFormat::Beats => 0,
-            TimeFormat::AbsoluteMs => 1,
-            TimeFormat::RunningMs => 2,
-            TimeFormat::RestartMs => 3,
-        }
-    }
-}
-
-/// Time
+/// FFI to free rust's Box::into_raw pointer.
 ///
-/// The first value is mixing time.
+/// It supposed to be used internally. Don't use it.
 ///
-/// The second value is offset in samples.
-#[derive(Debug, Default)]
-#[repr(C)]
-pub struct Time(pub f64, pub f64);
-
-impl FromRawPtr for Time {
-    fn from_raw_ptr(value: intptr_t) -> Self {
-        unsafe { *Box::from_raw(value as *mut c_void as *mut Time) }
-    }
+/// # Safety
+///
+/// Unsafe
+#[no_mangle]
+unsafe extern "C" fn free_rbox_raw(raw_ptr: *mut c_void) {
+    let _ = Box::from_raw(raw_ptr);
 }
 
-/// Name of the color (or MIDI channel) in Piano Roll.
-#[derive(Debug)]
-pub struct NameColor {
-    /// User-defined name (can be empty).
-    pub name: String,
-    /// Visible name (can be guessed).
-    pub vis_name: String,
-    /// Color/MIDI channel index.
-    pub color: u8,
-    /// Real index of the item (can be used to translate plugin's own in/out into real mixer track
-    /// number).
-    pub index: usize,
-}
-
-/// Type used in FFI for [`NameColor`](struct.NameColor.html).
-#[repr(C)]
-pub struct TNameColor {
-    name: [u8; 256],
-    vis_name: [u8; 256],
-    color: c_int,
-    index: c_int,
-}
-
-impl FromRawPtr for TNameColor {
-    fn from_raw_ptr(value: intptr_t) -> Self {
-        unsafe { *Box::from_raw(value as *mut Self) }
-    }
-}
-
-impl From<TNameColor> for NameColor {
-    fn from(name_color: TNameColor) -> Self {
-        Self {
-            name: String::from_utf8_lossy(&name_color.name[..]).to_string(),
-            vis_name: String::from_utf8_lossy(&name_color.vis_name[..]).to_string(),
-            color: name_color.color as u8,
-            index: name_color.index as usize,
-        }
-    }
-}
-
-impl From<NameColor> for TNameColor {
-    fn from(name_color: NameColor) -> Self {
-        let mut name = [0_u8; 256];
-        name.copy_from_slice(name_color.name.as_bytes());
-        let mut vis_name = [0_u8; 256];
-        vis_name.copy_from_slice(name_color.vis_name.as_bytes());
-        Self {
-            name,
-            vis_name,
-            color: name_color.color as c_int,
-            index: name_color.index as c_int,
-        }
-    }
-}
-
-impl From<u64> for MidiMessage {
-    fn from(value: u64) -> Self {
-        MidiMessage {
-            status: (value & 0xff) as u8,
-            data1: ((value >> 8) & 0xff) as u8,
-            data2: ((value >> 16) & 0xff) as u8,
-            port: 0,
-        }
-    }
-}
-
-impl fmt::Debug for MidiMessage {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("MidiMessage")
-            .field("status", &self.status)
-            .field("data1", &self.data1)
-            .field("data2", &self.data2)
-            .field("port", &self.port)
-            .finish()
-    }
-}
-
-impl fmt::Debug for TimeSignature {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TimeSignature")
-            .field("steps_per_bar", &self.steps_per_bar)
-            .field("steps_per_beat", &self.steps_per_beat)
-            .field("ppq", &self.ppq)
-            .finish()
-    }
-}
-
-impl fmt::Debug for ffi::Message {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Message")
-            .field("id", &self.id)
-            .field("index", &self.index)
-            .field("value", &self.value)
-            .finish()
-    }
+/// FFI to free rust's CString pointer.
+///
+/// It supposed to be used internally. Don't use it.
+///
+/// # Safety
+///
+/// Unsafe
+#[no_mangle]
+unsafe extern "C" fn free_rstring(raw_str: *mut c_char) {
+    let _ = CString::from_raw(raw_str);
 }

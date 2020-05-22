@@ -1,12 +1,14 @@
 #pragma once
 
 #include "fp_plugclass.h"
-#include "rust/cxx.h"
 
-struct Message;
-struct MidiMessage;
 struct PluginAdapter;
-struct TimeSignature;
+
+struct FlMessage {
+    intptr_t id;
+    intptr_t index;
+    intptr_t value;
+};
 
 // from plugin.rs
 struct Info {
@@ -74,18 +76,20 @@ class PluginWrapper : public TFruityPlug {
     PluginAdapter *adapter;
 };
 
-TimeSignature time_sig_from_raw(intptr_t raw_time_sig);
-
 // Unsafe Rust FFI
 //
 // PluginAdapter methods
 extern "C" void *create_plug_instance_c(void *host, intptr_t tag,
                                         void *adapter);
 extern "C" Info *plugin_info(PluginAdapter *adapter);
-extern "C" intptr_t plugin_dispatcher(PluginAdapter *adapter, Message message);
-extern "C" intptr_t plugin_process_event(PluginAdapter *adapter, Message event);
-extern "C" intptr_t plugin_process_param(PluginAdapter *adapter, Message event);
-extern "C" char *plugin_name_of(const PluginAdapter *adapter, Message message);
+extern "C" intptr_t plugin_dispatcher(PluginAdapter *adapter,
+                                      FlMessage message);
+extern "C" intptr_t plugin_process_event(PluginAdapter *adapter,
+                                         FlMessage event);
+extern "C" intptr_t plugin_process_param(PluginAdapter *adapter,
+                                         FlMessage event);
+extern "C" char *plugin_name_of(const PluginAdapter *adapter,
+                                FlMessage message);
 extern "C" void plugin_idle(PluginAdapter *adapter);
 extern "C" void plugin_tick(PluginAdapter *adapter);
 extern "C" void plugin_midi_tick(PluginAdapter *adapter);
@@ -94,7 +98,7 @@ extern "C" void plugin_eff_render(PluginAdapter *adapter,
                                   int len);
 extern "C" void plugin_gen_render(PluginAdapter *adapter, float dest[1][2],
                                   int len);
-extern "C" void plugin_midi_in(PluginAdapter *adapter, MidiMessage message);
+extern "C" void plugin_midi_in(PluginAdapter *adapter, int &message);
 extern "C" void plugin_save_state(PluginAdapter *adapter, IStream *istream);
 extern "C" void plugin_load_state(PluginAdapter *adapter, IStream *istream);
 extern "C" void plugin_loop_in(PluginAdapter *adapter, intptr_t message);
@@ -105,10 +109,10 @@ extern "C" intptr_t voice_handler_trigger(PluginAdapter *adapter, Params params,
 extern "C" void voice_handler_release(PluginAdapter *adapter, void *voice);
 extern "C" void voice_handler_kill(PluginAdapter *adapter, void *voice);
 extern "C" intptr_t voice_handler_on_event(PluginAdapter *adapter, void *voice,
-                                           Message message);
+                                           FlMessage message);
 extern "C" void out_voice_handler_kill(PluginAdapter *adapter, intptr_t tag);
 extern "C" intptr_t out_voice_handler_on_event(PluginAdapter *adapter,
-                                               intptr_t tag, Message message);
+                                               intptr_t tag, FlMessage message);
 
 // IStream
 extern "C" int32_t istream_read(void *istream, uint8_t *data, uint32_t size,
@@ -118,7 +122,7 @@ extern "C" int32_t istream_write(void *istream, const uint8_t *data,
 
 // Host
 extern "C" intptr_t host_on_message(void *host, TPluginTag tag,
-                                    Message message);
+                                    FlMessage message);
 extern "C" void host_on_parameter(void *host, TPluginTag tag, int index,
                                   int value);
 extern "C" void host_on_controller(void *host, TPluginTag tag, intptr_t index,
@@ -154,15 +158,16 @@ extern "C" bool prompt_show(void *host, int x, int y, char *msg, char *result,
 extern "C" void host_release_voice(void *host, intptr_t tag);
 extern "C" void host_kill_voice(void *host, intptr_t tag);
 extern "C" intptr_t host_on_voice_event(void *host, intptr_t tag,
-                                        Message message);
+                                        FlMessage message);
 extern "C" intptr_t host_trig_out_voice(void *host, Params *params,
                                         int32_t index, intptr_t tag);
 extern "C" void host_release_out_voice(void *host, intptr_t tag);
 extern "C" void host_kill_out_voice(void *host, intptr_t tag);
 extern "C" intptr_t host_on_out_voice_event(void *host, intptr_t tag,
-                                            Message message);
+                                            FlMessage message);
 
 // Utility
+extern "C" void fplog(const char *msg);
 extern "C" intptr_t init_p_notes_params(int target, int flags, int ch_num,
                                         int pat_num, TNoteParams *notes,
                                         int len);

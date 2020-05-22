@@ -5,7 +5,7 @@ use std::os::raw::{c_int, c_void};
 use crate::host::{GetName, Host};
 use crate::plugin;
 use crate::{
-    ffi, intptr_t, AsRawPtr, MessageBoxFlags, MessageBoxResult, NameColor, Note, Notes,
+    intptr_t, AsRawPtr, FlMessage, MessageBoxFlags, MessageBoxResult, NameColor, Note, Notes,
     ParamMenuEntry, SongTime, TNameColor, TParamMenuEntry, Tag, Time, TimeFormat, ValuePtr,
 };
 
@@ -47,7 +47,7 @@ macro_rules! impl_message_ty {
 }
 
 extern "C" {
-    fn host_on_message(host: *mut c_void, plugin_tag: Tag, message: ffi::Message) -> intptr_t;
+    fn host_on_message(host: *mut c_void, plugin_tag: Tag, message: FlMessage) -> intptr_t;
 }
 
 /// Tells the host that the user has clicked an item of the control popup menu.
@@ -60,9 +60,9 @@ pub struct ParamMenu(pub usize, pub usize);
 
 impl_message!(ParamMenu);
 
-impl From<ParamMenu> for ffi::Message {
+impl From<ParamMenu> for FlMessage {
     fn from(message: ParamMenu) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 0,
             index: message.0.as_raw_ptr(),
             value: message.1.as_raw_ptr(),
@@ -76,9 +76,9 @@ pub struct EditorResized;
 
 impl_message!(EditorResized);
 
-impl From<EditorResized> for ffi::Message {
+impl From<EditorResized> for FlMessage {
     fn from(_message: EditorResized) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 2,
             index: 0,
             value: 0,
@@ -93,12 +93,12 @@ pub struct NamesChanged(pub GetName);
 
 impl_message!(NamesChanged);
 
-impl From<NamesChanged> for ffi::Message {
+impl From<NamesChanged> for FlMessage {
     fn from(message: NamesChanged) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 3,
             index: 0,
-            value: Option::<ffi::Message>::from(message.0)
+            value: Option::<FlMessage>::from(message.0)
                 .map(|msg| msg.id)
                 .unwrap_or_default(),
         }
@@ -112,9 +112,9 @@ pub struct ActivateMidi;
 
 impl_message!(ActivateMidi);
 
-impl From<ActivateMidi> for ffi::Message {
+impl From<ActivateMidi> for FlMessage {
     fn from(_: ActivateMidi) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 4,
             index: 0,
             value: 0,
@@ -132,9 +132,9 @@ pub struct WantMidiInput(pub bool);
 
 impl_message!(WantMidiInput);
 
-impl From<WantMidiInput> for ffi::Message {
+impl From<WantMidiInput> for FlMessage {
     fn from(message: WantMidiInput) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 5,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -155,9 +155,9 @@ pub struct KillAutomation(pub usize, pub usize);
 
 impl_message!(KillAutomation);
 
-impl From<KillAutomation> for ffi::Message {
+impl From<KillAutomation> for FlMessage {
     fn from(message: KillAutomation) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 8,
             index: message.0.as_raw_ptr(),
             value: message.1.as_raw_ptr(),
@@ -174,9 +174,9 @@ pub struct SetNumPresets(pub usize);
 
 impl_message!(SetNumPresets);
 
-impl From<SetNumPresets> for ffi::Message {
+impl From<SetNumPresets> for FlMessage {
     fn from(message: SetNumPresets) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 9,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -192,9 +192,9 @@ pub struct SetNewName(pub String);
 
 impl_message!(SetNewName);
 
-impl From<SetNewName> for ffi::Message {
+impl From<SetNewName> for FlMessage {
     fn from(message: SetNewName) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 10,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -208,9 +208,9 @@ pub struct VstiIdle;
 
 impl_message!(VstiIdle);
 
-impl From<VstiIdle> for ffi::Message {
+impl From<VstiIdle> for FlMessage {
     fn from(_message: VstiIdle) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 11,
             index: 0,
             value: 0,
@@ -237,9 +237,9 @@ pub enum WantIdle {
 
 impl_message!(WantIdle);
 
-impl From<WantIdle> for ffi::Message {
+impl From<WantIdle> for FlMessage {
     fn from(message: WantIdle) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 13,
             index: 0,
             value: message.into(),
@@ -267,9 +267,9 @@ pub struct LocateDataFile(pub String);
 
 impl_message_ty!(LocateDataFile, String);
 
-impl From<LocateDataFile> for ffi::Message {
+impl From<LocateDataFile> for FlMessage {
     fn from(message: LocateDataFile) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 14,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -289,17 +289,17 @@ impl Message for TicksToTime {
     type Return = SongTime;
 
     fn send(self, tag: plugin::Tag, host: &mut Host) -> Self::Return {
-        let message = ffi::Message::from(self);
+        let message = FlMessage::from(self);
         let time_ptr = message.index;
         unsafe { host_on_message(*host.host_ptr.get_mut(), tag.0, message) };
         ValuePtr(time_ptr).get::<Self::Return>()
     }
 }
 
-impl From<TicksToTime> for ffi::Message {
+impl From<TicksToTime> for FlMessage {
     fn from(message: TicksToTime) -> Self {
         let time = SongTime::default();
-        ffi::Message {
+        FlMessage {
             id: 16,
             index: (Box::into_raw(Box::new(time)) as *mut c_void).as_raw_ptr(),
             value: message.0.as_raw_ptr(),
@@ -313,7 +313,7 @@ pub struct AddToPianoRoll(pub Notes);
 
 impl_message!(AddToPianoRoll);
 
-impl From<AddToPianoRoll> for ffi::Message {
+impl From<AddToPianoRoll> for FlMessage {
     fn from(mut message: AddToPianoRoll) -> Self {
         message.0.notes.shrink_to_fit();
         let notes_ptr = message.0.notes.as_mut_ptr();
@@ -330,7 +330,7 @@ impl From<AddToPianoRoll> for ffi::Message {
             )
         };
 
-        ffi::Message {
+        FlMessage {
             id: 17,
             index: 0,
             value: p_notes_params,
@@ -368,7 +368,7 @@ impl Message for GetParamMenuEntry {
     type Return = Option<ParamMenuEntry>;
 
     fn send(self, tag: plugin::Tag, host: &mut Host) -> Self::Return {
-        let message = ffi::Message::from(self);
+        let message = FlMessage::from(self);
         let result = unsafe { host_on_message(*host.host_ptr.get_mut(), tag.0, message) };
 
         if (result as *mut c_void).is_null() {
@@ -381,9 +381,9 @@ impl Message for GetParamMenuEntry {
     }
 }
 
-impl From<GetParamMenuEntry> for ffi::Message {
+impl From<GetParamMenuEntry> for FlMessage {
     fn from(message: GetParamMenuEntry) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 18,
             index: message.0.as_raw_ptr(),
             value: message.1.as_raw_ptr(),
@@ -405,9 +405,9 @@ pub struct MessageBox(pub String, pub String, pub MessageBoxFlags);
 
 impl_message_ty!(MessageBox, MessageBoxResult);
 
-impl From<MessageBox> for ffi::Message {
+impl From<MessageBox> for FlMessage {
     fn from(message: MessageBox) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 19,
             index: format!("{}|{}", message.0, message.1).as_raw_ptr(),
             value: message.2.as_raw_ptr(),
@@ -427,9 +427,9 @@ pub struct NoteOn(pub u8, pub u8, pub u8);
 
 impl_message!(NoteOn);
 
-impl From<NoteOn> for ffi::Message {
+impl From<NoteOn> for FlMessage {
     fn from(message: NoteOn) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 20,
             index: dword_from_note_and_ch(message.0, message.1).as_raw_ptr(),
             value: message.2.as_raw_ptr(),
@@ -445,9 +445,9 @@ pub struct NoteOff(pub u8);
 
 impl_message!(NoteOff);
 
-impl From<NoteOff> for ffi::Message {
+impl From<NoteOff> for FlMessage {
     fn from(message: NoteOff) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 21,
             index: message.0.as_raw_ptr(),
             value: 0,
@@ -464,9 +464,9 @@ pub struct OnHintDirect(pub String);
 
 impl_message!(OnHintDirect);
 
-impl From<OnHintDirect> for ffi::Message {
+impl From<OnHintDirect> for FlMessage {
     fn from(message: OnHintDirect) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 22,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -484,9 +484,9 @@ pub struct SetNewColor(pub u8);
 
 impl_message!(SetNewColor);
 
-impl From<SetNewColor> for ffi::Message {
+impl From<SetNewColor> for FlMessage {
     fn from(message: SetNewColor) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 23,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -499,9 +499,9 @@ impl From<SetNewColor> for ffi::Message {
 // #[derive(Debug)]
 // pub struct GetInstance;
 
-// impl From<GetInstance> for ffi::Message {
+// impl From<GetInstance> for FlMessage {
 // fn from(_: GetInstance) -> Self {
-// ffi::Message {
+// FlMessage {
 // id: 24,
 // index: 0,
 // value: 0,
@@ -520,9 +520,9 @@ pub struct KillIntCtrl(pub usize, pub usize);
 
 impl_message!(KillIntCtrl);
 
-impl From<KillIntCtrl> for ffi::Message {
+impl From<KillIntCtrl> for FlMessage {
     fn from(message: KillIntCtrl) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 25,
             index: message.0.as_raw_ptr(),
             value: message.1.as_raw_ptr(),
@@ -539,9 +539,9 @@ pub struct SetNumParams(pub usize);
 
 impl_message!(SetNumParams);
 
-impl From<SetNumParams> for ffi::Message {
+impl From<SetNumParams> for FlMessage {
     fn from(message: SetNumParams) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 27,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -560,9 +560,9 @@ pub struct PackDataFile(pub String);
 
 impl_message_ty!(PackDataFile, String);
 
-impl From<PackDataFile> for ffi::Message {
+impl From<PackDataFile> for FlMessage {
     fn from(message: PackDataFile) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 28,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -579,9 +579,9 @@ pub struct GetProgPath;
 
 impl_message_ty!(GetProgPath, String);
 
-impl From<GetProgPath> for ffi::Message {
+impl From<GetProgPath> for FlMessage {
     fn from(_: GetProgPath) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 29,
             index: 0,
             value: 0,
@@ -597,9 +597,9 @@ pub struct SetLatency(pub u32);
 
 impl_message!(SetLatency);
 
-impl From<SetLatency> for ffi::Message {
+impl From<SetLatency> for FlMessage {
     fn from(message: SetLatency) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 30,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -613,9 +613,9 @@ pub struct CallDownloader;
 
 impl_message!(CallDownloader);
 
-impl From<CallDownloader> for ffi::Message {
+impl From<CallDownloader> for FlMessage {
     fn from(_: CallDownloader) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 31,
             index: 0,
             value: 0,
@@ -634,9 +634,9 @@ pub struct EditSample(pub String, pub bool);
 
 impl_message!(EditSample);
 
-impl From<EditSample> for ffi::Message {
+impl From<EditSample> for FlMessage {
     fn from(message: EditSample) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 32,
             index: message.1.as_raw_ptr(),
             value: message.0.as_raw_ptr(),
@@ -656,9 +656,9 @@ pub struct SetThreadSafe(pub bool);
 
 impl_message!(SetThreadSafe);
 
-impl From<SetThreadSafe> for ffi::Message {
+impl From<SetThreadSafe> for FlMessage {
     fn from(message: SetThreadSafe) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 33,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -675,9 +675,9 @@ pub struct SmartDisable(pub bool);
 
 impl_message!(SmartDisable);
 
-impl From<SmartDisable> for ffi::Message {
+impl From<SmartDisable> for FlMessage {
     fn from(message: SmartDisable) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 34,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -694,9 +694,9 @@ pub struct SetUid(pub String);
 
 impl_message!(SetUid);
 
-impl From<SetUid> for ffi::Message {
+impl From<SetUid> for FlMessage {
     fn from(message: SetUid) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 35,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -722,22 +722,22 @@ impl Message for GetMixingTime {
     }
 }
 
-fn get_time_send<T: Into<ffi::Message>>(msg: T, tag: plugin::Tag, host: &mut Host) -> Time {
-    let message: ffi::Message = msg.into();
+fn get_time_send<T: Into<FlMessage>>(msg: T, tag: plugin::Tag, host: &mut Host) -> Time {
+    let message: FlMessage = msg.into();
     let time_ptr = message.value;
     unsafe { host_on_message(*host.host_ptr.get_mut(), tag.0, message) };
     ValuePtr(time_ptr).get::<Time>()
 }
 
-impl From<GetMixingTime> for ffi::Message {
+impl From<GetMixingTime> for FlMessage {
     fn from(message: GetMixingTime) -> Self {
         get_time_ffi(36, message.0, message.1)
     }
 }
 
-fn get_time_ffi(id: intptr_t, format: TimeFormat, offset: u64) -> ffi::Message {
+fn get_time_ffi(id: intptr_t, format: TimeFormat, offset: u64) -> FlMessage {
     let time = Time(offset as f64, offset as f64);
-    ffi::Message {
+    FlMessage {
         id,
         index: u8::from(format).as_raw_ptr(),
         value: (Box::into_raw(Box::new(time)) as *mut c_void).as_raw_ptr(),
@@ -756,7 +756,7 @@ impl Message for GetPlaybackTime {
     }
 }
 
-impl From<GetPlaybackTime> for ffi::Message {
+impl From<GetPlaybackTime> for FlMessage {
     fn from(message: GetPlaybackTime) -> Self {
         get_time_ffi(37, message.0, message.1)
     }
@@ -779,7 +779,7 @@ impl Message for GetSelTime {
     }
 }
 
-impl From<GetSelTime> for ffi::Message {
+impl From<GetSelTime> for FlMessage {
     fn from(message: GetSelTime) -> Self {
         get_time_ffi(38, message.0, 0)
     }
@@ -794,9 +794,9 @@ pub struct GetTimeMul;
 
 impl_message_ty!(GetTimeMul, f32);
 
-impl From<GetTimeMul> for ffi::Message {
+impl From<GetTimeMul> for FlMessage {
     fn from(_: GetTimeMul) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 39,
             index: 0,
             value: 0,
@@ -812,9 +812,9 @@ pub struct Captionize(pub bool);
 
 impl_message!(Captionize);
 
-impl From<Captionize> for ffi::Message {
+impl From<Captionize> for FlMessage {
     fn from(message: Captionize) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 40,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -840,7 +840,7 @@ impl Message for SendSysEx<'_> {
     }
 }
 
-impl From<SendSysEx<'_>> for ffi::Message {
+impl From<SendSysEx<'_>> for FlMessage {
     fn from(message: SendSysEx<'_>) -> Self {
         let len = message.1.len() as i32;
         let len_bytes: [u8; mem::size_of::<i32>()] = unsafe { mem::transmute(len) };
@@ -848,7 +848,7 @@ impl From<SendSysEx<'_>> for ffi::Message {
         let data_ptr = final_data.as_mut_ptr();
         mem::forget(final_data);
 
-        ffi::Message {
+        FlMessage {
             id: 41,
             index: message.0.as_raw_ptr(),
             value: (data_ptr as *mut c_void).as_raw_ptr(),
@@ -865,9 +865,9 @@ pub struct LoadAudioClip(pub String);
 
 impl_message!(LoadAudioClip);
 
-impl From<LoadAudioClip> for ffi::Message {
+impl From<LoadAudioClip> for FlMessage {
     fn from(message: LoadAudioClip) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 42,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -883,9 +883,9 @@ pub struct LoadInChannel(pub String);
 
 impl_message!(LoadInChannel);
 
-impl From<LoadInChannel> for ffi::Message {
+impl From<LoadInChannel> for FlMessage {
     fn from(message: LoadInChannel) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 43,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -902,9 +902,9 @@ pub struct ShowInBrowser(pub String);
 
 impl_message!(ShowInBrowser);
 
-impl From<ShowInBrowser> for ffi::Message {
+impl From<ShowInBrowser> for FlMessage {
     fn from(message: ShowInBrowser) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 44,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -920,9 +920,9 @@ pub struct DebugLogMsg(pub String);
 
 impl_message!(DebugLogMsg);
 
-impl From<DebugLogMsg> for ffi::Message {
+impl From<DebugLogMsg> for FlMessage {
     fn from(message: DebugLogMsg) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 45,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -940,7 +940,7 @@ impl Message for GetMainFormHandle {
     type Return = Option<*mut c_void>;
 
     fn send(self, tag: plugin::Tag, host: &mut Host) -> Self::Return {
-        let message = ffi::Message::from(self);
+        let message = FlMessage::from(self);
         let result_ptr = message.value;
         unsafe { host_on_message(*host.host_ptr.get_mut(), tag.0, message) };
 
@@ -952,9 +952,9 @@ impl Message for GetMainFormHandle {
     }
 }
 
-impl From<GetMainFormHandle> for ffi::Message {
+impl From<GetMainFormHandle> for FlMessage {
     fn from(_: GetMainFormHandle) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 46,
             index: 0,
             value: 0,
@@ -970,9 +970,9 @@ pub struct GetProjDataPath;
 
 impl_message_ty!(GetProjDataPath, String);
 
-impl From<GetProjDataPath> for ffi::Message {
+impl From<GetProjDataPath> for FlMessage {
     fn from(_message: GetProjDataPath) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 47,
             index: 0,
             value: 0,
@@ -987,9 +987,9 @@ pub struct SetDirty;
 
 impl_message!(SetDirty);
 
-impl From<SetDirty> for ffi::Message {
+impl From<SetDirty> for FlMessage {
     fn from(_message: SetDirty) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 48,
             index: 0,
             value: 0,
@@ -1005,9 +1005,9 @@ pub struct AddToRecent(pub String);
 
 impl_message!(AddToRecent);
 
-impl From<AddToRecent> for ffi::Message {
+impl From<AddToRecent> for FlMessage {
     fn from(message: AddToRecent) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 49,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -1029,9 +1029,9 @@ pub enum GetNumInOut {
 
 impl_message_ty!(GetNumInOut, usize);
 
-impl From<GetNumInOut> for ffi::Message {
+impl From<GetNumInOut> for FlMessage {
     fn from(message: GetNumInOut) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 50,
             index: message.into(),
             value: 0,
@@ -1066,12 +1066,12 @@ impl Message for GetInName {
     }
 }
 
-fn get_name_dispatcher<T: Into<ffi::Message>>(
+fn get_name_dispatcher<T: Into<FlMessage>>(
     msg: T,
     tag: plugin::Tag,
     host: &mut Host,
 ) -> Option<NameColor> {
-    let message: ffi::Message = msg.into();
+    let message: FlMessage = msg.into();
     let result_ptr = message.value;
     let result = unsafe { host_on_message(*host.host_ptr.get_mut(), tag.0, message) };
 
@@ -1082,20 +1082,20 @@ fn get_name_dispatcher<T: Into<ffi::Message>>(
     Some(ValuePtr(result_ptr).get::<TNameColor>().into())
 }
 
-impl From<GetInName> for ffi::Message {
+impl From<GetInName> for FlMessage {
     fn from(message: GetInName) -> Self {
         get_name_ffi(51, message.0)
     }
 }
 
-fn get_name_ffi(id: intptr_t, index: usize) -> ffi::Message {
+fn get_name_ffi(id: intptr_t, index: usize) -> FlMessage {
     let name_color = TNameColor {
         name: [0; 256],
         vis_name: [0; 256],
         color: 0,
         index: index as c_int,
     };
-    ffi::Message {
+    FlMessage {
         id,
         index: index.as_raw_ptr(),
         value: (Box::into_raw(Box::new(name_color)) as *mut c_void).as_raw_ptr(),
@@ -1120,7 +1120,7 @@ impl Message for GetOutName {
     }
 }
 
-impl From<GetOutName> for ffi::Message {
+impl From<GetOutName> for FlMessage {
     fn from(message: GetOutName) -> Self {
         get_name_ffi(52, message.0)
     }
@@ -1139,9 +1139,9 @@ pub enum ShowEditor {
 
 impl_message!(ShowEditor);
 
-impl From<ShowEditor> for ffi::Message {
+impl From<ShowEditor> for FlMessage {
     fn from(message: ShowEditor) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 53,
             index: 0,
             value: message.into(),
@@ -1166,9 +1166,9 @@ pub struct FloatAutomation(pub usize, pub usize);
 
 impl_message!(FloatAutomation);
 
-impl From<FloatAutomation> for ffi::Message {
+impl From<FloatAutomation> for FlMessage {
     fn from(message: FloatAutomation) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 54,
             index: message.0.as_raw_ptr(),
             value: message.1.as_raw_ptr(),
@@ -1188,9 +1188,9 @@ pub struct ShowSettings(pub bool);
 
 impl_message!(ShowSettings);
 
-impl From<ShowSettings> for ffi::Message {
+impl From<ShowSettings> for FlMessage {
     fn from(message: ShowSettings) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 55,
             index: 0,
             value: message.0.as_raw_ptr(),
@@ -1210,9 +1210,9 @@ pub struct NoteOnOff(pub u8, pub u8, pub u8);
 
 impl_message!(NoteOnOff);
 
-impl From<NoteOnOff> for ffi::Message {
+impl From<NoteOnOff> for FlMessage {
     fn from(message: NoteOnOff) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 56,
             index: dword_from_note_and_ch(message.0, message.1).as_raw_ptr(),
             value: message.2.as_raw_ptr(),
@@ -1244,10 +1244,10 @@ pub enum PickerFilter {
     Patcher,
 }
 
-impl From<ShowPicker> for ffi::Message {
+impl From<ShowPicker> for FlMessage {
     fn from(message: ShowPicker) -> Self {
         let (index, value): (intptr_t, intptr_t) = message.into();
-        ffi::Message {
+        FlMessage {
             id: 57,
             index,
             value,
@@ -1282,9 +1282,9 @@ pub struct GetIdleOverflow;
 
 impl_message!(GetIdleOverflow);
 
-impl From<GetIdleOverflow> for ffi::Message {
+impl From<GetIdleOverflow> for FlMessage {
     fn from(_: GetIdleOverflow) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 58,
             index: 0,
             value: 0,
@@ -1298,9 +1298,9 @@ pub struct ModalIdle;
 
 impl_message!(ModalIdle);
 
-impl From<ModalIdle> for ffi::Message {
+impl From<ModalIdle> for FlMessage {
     fn from(_: ModalIdle) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 59,
             index: 0,
             value: 0,
@@ -1314,9 +1314,9 @@ pub struct RenderProject;
 
 impl_message!(RenderProject);
 
-impl From<RenderProject> for ffi::Message {
+impl From<RenderProject> for FlMessage {
     fn from(_: RenderProject) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 60,
             index: 0,
             value: 0,
@@ -1341,9 +1341,9 @@ pub enum GetProjectInfo {
 
 impl_message_ty!(GetProjectInfo, String);
 
-impl From<GetProjectInfo> for ffi::Message {
+impl From<GetProjectInfo> for FlMessage {
     fn from(message: GetProjectInfo) -> Self {
-        ffi::Message {
+        FlMessage {
             id: 61,
             index: message.into(),
             value: 0,

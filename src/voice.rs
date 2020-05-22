@@ -3,7 +3,7 @@
 use std::os::raw::c_void;
 
 use crate::plugin::PluginAdapter;
-use crate::{ffi, intptr_t, AsRawPtr, ValuePtr};
+use crate::{intptr_t, AsRawPtr, FlMessage, ValuePtr};
 
 crate::implement_tag!();
 
@@ -105,8 +105,8 @@ pub enum Event {
     Unknown,
 }
 
-impl From<ffi::Message> for Event {
-    fn from(message: ffi::Message) -> Self {
+impl From<FlMessage> for Event {
+    fn from(message: FlMessage) -> Self {
         match message.id {
             0 => Event::Retrigger,
             1 => Event::GetLength,
@@ -120,40 +120,40 @@ impl From<ffi::Message> for Event {
     }
 }
 
-impl From<Event> for Option<ffi::Message> {
+impl From<Event> for Option<FlMessage> {
     fn from(event: Event) -> Self {
         match event {
-            Event::Retrigger => Some(ffi::Message {
+            Event::Retrigger => Some(FlMessage {
                 id: 0,
                 index: 0,
                 value: 0,
             }),
-            Event::GetLength => Some(ffi::Message {
+            Event::GetLength => Some(FlMessage {
                 id: 1,
                 index: 0,
                 value: 0,
             }),
-            Event::GetColor => Some(ffi::Message {
+            Event::GetColor => Some(FlMessage {
                 id: 2,
                 index: 0,
                 value: 0,
             }),
-            Event::GetVelocity => Some(ffi::Message {
+            Event::GetVelocity => Some(FlMessage {
                 id: 3,
                 index: 0,
                 value: 0,
             }),
-            Event::GetRelVelocity => Some(ffi::Message {
+            Event::GetRelVelocity => Some(FlMessage {
                 id: 4,
                 index: 0,
                 value: 0,
             }),
-            Event::GetRelTime => Some(ffi::Message {
+            Event::GetRelTime => Some(FlMessage {
                 id: 5,
                 index: 0,
                 value: 0,
             }),
-            Event::SetLinkVelocity(value) => Some(ffi::Message {
+            Event::SetLinkVelocity(value) => Some(FlMessage {
                 id: 6,
                 index: value as isize,
                 value: 0,
@@ -195,7 +195,7 @@ pub trait SendVoiceHandler: Send + Sync {
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn voice_handler_trigger(
+unsafe extern "C" fn voice_handler_trigger(
     adapter: *mut PluginAdapter,
     params: Params,
     tag: intptr_t,
@@ -220,7 +220,7 @@ pub unsafe extern "C" fn voice_handler_trigger(
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn voice_handler_release(
+unsafe extern "C" fn voice_handler_release(
     adapter: *mut PluginAdapter,
     voice: *mut &mut dyn Voice,
 ) {
@@ -241,10 +241,7 @@ pub unsafe extern "C" fn voice_handler_release(
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn voice_handler_kill(
-    adapter: *mut PluginAdapter,
-    voice: *mut &mut dyn Voice,
-) {
+unsafe extern "C" fn voice_handler_kill(adapter: *mut PluginAdapter, voice: *mut &mut dyn Voice) {
     let r_voice = Box::from_raw(voice);
     if let Some(handler) = (*adapter).0.voice_handler() {
         handler.kill(r_voice.tag())
@@ -260,7 +257,7 @@ pub unsafe extern "C" fn voice_handler_kill(
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn out_voice_handler_kill(adapter: *mut PluginAdapter, tag: intptr_t) {
+unsafe extern "C" fn out_voice_handler_kill(adapter: *mut PluginAdapter, tag: intptr_t) {
     (*adapter).0.voice_handler().and_then(|handler| {
         handler.out_handler().map(|out_handler| {
             out_handler.kill(Tag(tag));
@@ -277,10 +274,10 @@ pub unsafe extern "C" fn out_voice_handler_kill(adapter: *mut PluginAdapter, tag
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn voice_handler_on_event(
+unsafe extern "C" fn voice_handler_on_event(
     adapter: *mut PluginAdapter,
     voice: *mut &mut dyn Voice,
-    message: ffi::Message,
+    message: FlMessage,
 ) -> intptr_t {
     (*adapter)
         .0
@@ -302,10 +299,10 @@ pub unsafe extern "C" fn voice_handler_on_event(
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-pub unsafe extern "C" fn out_voice_handler_on_event(
+unsafe extern "C" fn out_voice_handler_on_event(
     adapter: *mut PluginAdapter,
     tag: intptr_t,
-    message: ffi::Message,
+    message: FlMessage,
 ) -> intptr_t {
     (*adapter)
         .0

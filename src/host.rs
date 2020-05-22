@@ -13,8 +13,8 @@ use log::trace;
 use crate::plugin::{self, message};
 use crate::voice::{self, SendVoiceHandler, Voice};
 use crate::{
-    ffi, intptr_t, AsRawPtr, FromRawPtr, MidiMessage, ProcessModeFlags, TimeSignature, Transport,
-    ValuePtr, WAVETABLE_SIZE,
+    intptr_t, AsRawPtr, FlMessage, FromRawPtr, MidiMessage, ProcessModeFlags, TTimeSigInfo,
+    TimeSignature, Transport, ValuePtr, WAVETABLE_SIZE,
 };
 
 /// Plugin host.
@@ -40,7 +40,7 @@ impl Host {
     // Get the version of FL Studio. It is stored in one integer. If the version of FL Studio
     // would be 1.2.3 for example, `version` would be 1002003
     // pub fn version(&self) -> i32 {
-        // todo!()
+    // todo!()
     // }
 
     /// Send message to host.
@@ -98,8 +98,8 @@ impl Host {
     /// about can be linked to a MIDI controller.
     /// - `"^b"` - informs the user that the parameter is recordable.
     /// - `"^c"` - shows a little smiley. No real use, just for fun.
-    /// - `"^d"` - shows a mouse with the right button clicked, to denote a control that has a popup
-    /// menu.
+    /// - `"^d"` - shows a mouse with the right button clicked, to denote a control that has a
+    /// popup menu.
     /// - `"^e"` - shows an unhappy smiley, to use when something went wrong.
     /// - `"^f"` - shows a left-pointing arrow
     /// - `"^g"` - shows a double right-pointing arrow, for fast forward
@@ -311,6 +311,7 @@ impl Host {
     }
 }
 
+#[no_mangle]
 extern "C" {
     fn host_on_parameter(host: *mut c_void, tag: intptr_t, index: c_int, value: c_int);
     fn host_on_controller(host: *mut c_void, tag: intptr_t, index: intptr_t, value: intptr_t);
@@ -421,16 +422,17 @@ impl SendVoiceHandler for Voicer {
 
     /// Tell the host that some event has happened concerning the specified voice.
     fn on_event(&mut self, tag: voice::Tag, event: voice::Event) -> Option<ValuePtr> {
-        Option::<ffi::Message>::from(event).map(|value| {
+        Option::<FlMessage>::from(event).map(|value| {
             ValuePtr(unsafe { host_on_voice_event(*self.host_ptr.get_mut(), tag.0, value) })
         })
     }
 }
 
+#[no_mangle]
 extern "C" {
     fn host_release_voice(host: *mut c_void, tag: intptr_t);
     fn host_kill_voice(host: *mut c_void, tag: intptr_t);
-    fn host_on_voice_event(host: *mut c_void, tag: intptr_t, message: ffi::Message) -> intptr_t;
+    fn host_on_voice_event(host: *mut c_void, tag: intptr_t, message: FlMessage) -> intptr_t;
 }
 
 /// Use this for operations with output voices (i.e. for VFX inside [patcher](
@@ -497,7 +499,7 @@ impl SendVoiceHandler for OutVoicer {
         trace!("send event {:?} for out voice {:?}", event, tag);
         let host_ptr = *self.host_ptr.get_mut();
         self.voices.get_mut(&tag).and_then(|voice| {
-            Option::<ffi::Message>::from(event).map(|message| {
+            Option::<FlMessage>::from(event).map(|message| {
                 ValuePtr(unsafe { host_on_out_voice_event(host_ptr, voice.inner_tag().0, message) })
             })
         })
@@ -550,8 +552,7 @@ extern "C" {
     ) -> intptr_t;
     fn host_release_out_voice(host: *mut c_void, tag: intptr_t);
     fn host_kill_out_voice(host: *mut c_void, tag: intptr_t);
-    fn host_on_out_voice_event(host: *mut c_void, tag: intptr_t, message: ffi::Message)
-        -> intptr_t;
+    fn host_on_out_voice_event(host: *mut c_void, tag: intptr_t, message: FlMessage) -> intptr_t;
 }
 
 /// Message from the host to the plugin
@@ -715,8 +716,8 @@ pub enum Message<'a> {
     Unknown,
 }
 
-impl From<ffi::Message> for Message<'_> {
-    fn from(message: ffi::Message) -> Self {
+impl From<FlMessage> for Message<'_> {
+    fn from(message: FlMessage) -> Self {
         trace!("host::Message::from {:?}", message);
 
         let result = match message.id {
@@ -733,7 +734,7 @@ impl From<ffi::Message> for Message<'_> {
             11 => Message::SetEnabled(message.value != 0),
             12 => Message::SetPlaying(message.value != 0),
             13 => Message::SongPosChanged,
-            14 => Message::SetTimeSig(ffi::time_sig_from_raw(message.value)),
+            14 => Message::SetTimeSig(TTimeSigInfo::from_raw_ptr(message.value).into()),
             15 => Message::CollectFile(message.index as usize),
             16 => Message::SetInternalParam,
             17 => Message::SetNumSends(message.value as u64),
@@ -743,7 +744,7 @@ impl From<ffi::Message> for Message<'_> {
             21 => Message::SetIdleTime(message.value as u64),
             22 => Message::SetFocus(message.value != 0),
             23 => Message::Transport(message.into()),
-            24 => Message::MidiIn((message.value as u64).into()),
+            24 => Message::MidiIn((message.value as c_int).into()),
             25 => Message::RoutingChanged,
             26 => Message::GetParamInfo(message.index as usize),
             27 => Message::ProjLoaded,
@@ -761,7 +762,7 @@ impl From<ffi::Message> for Message<'_> {
 }
 
 impl Message<'_> {
-    fn from_show_editor(message: ffi::Message) -> Self {
+    fn from_show_editor(message: FlMessage) -> Self {
         if message.value == 1 {
             Message::ShowEditor(None)
         } else {
@@ -769,12 +770,12 @@ impl Message<'_> {
         }
     }
 
-    fn from_process_mode(message: ffi::Message) -> Self {
+    fn from_process_mode(message: FlMessage) -> Self {
         let flags = ProcessModeFlags::from_bits_truncate(message.value);
         Message::ProcessMode(flags)
     }
 
-    fn from_chan_sample_changed(message: ffi::Message) -> Self {
+    fn from_chan_sample_changed(message: FlMessage) -> Self {
         let slice =
             unsafe { std::slice::from_raw_parts_mut(message.value as *mut f32, WAVETABLE_SIZE) };
         Message::ChanSampleChanged(slice)
@@ -835,8 +836,8 @@ pub enum GetName {
     Unknown,
 }
 
-impl From<ffi::Message> for GetName {
-    fn from(message: ffi::Message) -> Self {
+impl From<FlMessage> for GetName {
+    fn from(message: FlMessage) -> Self {
         trace!("GetName::from {:?}", message);
 
         let result = match message.id {
@@ -859,55 +860,55 @@ impl From<ffi::Message> for GetName {
     }
 }
 
-impl From<GetName> for Option<ffi::Message> {
+impl From<GetName> for Option<FlMessage> {
     fn from(value: GetName) -> Self {
         match value {
-            GetName::Param(index) => Some(ffi::Message {
+            GetName::Param(index) => Some(FlMessage {
                 id: 0,
                 index: index.as_raw_ptr(),
                 value: 0,
             }),
-            GetName::ParamValue(index, value) => Some(ffi::Message {
+            GetName::ParamValue(index, value) => Some(FlMessage {
                 id: 1,
                 index: index.as_raw_ptr(),
                 value,
             }),
-            GetName::Semitone(index, value) => Some(ffi::Message {
+            GetName::Semitone(index, value) => Some(FlMessage {
                 id: 2,
                 index: index.as_raw_ptr(),
                 value: value.as_raw_ptr(),
             }),
-            GetName::Patch(index) => Some(ffi::Message {
+            GetName::Patch(index) => Some(FlMessage {
                 id: 3,
                 index: index.as_raw_ptr(),
                 value: 0,
             }),
-            GetName::VoiceLevel(index) => Some(ffi::Message {
+            GetName::VoiceLevel(index) => Some(FlMessage {
                 id: 4,
                 index: index.as_raw_ptr(),
                 value: 0,
             }),
-            GetName::VoiceLevelHint(index) => Some(ffi::Message {
+            GetName::VoiceLevelHint(index) => Some(FlMessage {
                 id: 5,
                 index: index.as_raw_ptr(),
                 value: 0,
             }),
-            GetName::Preset(index) => Some(ffi::Message {
+            GetName::Preset(index) => Some(FlMessage {
                 id: 6,
                 index: index.as_raw_ptr(),
                 value: 0,
             }),
-            GetName::OutCtrl(index) => Some(ffi::Message {
+            GetName::OutCtrl(index) => Some(FlMessage {
                 id: 7,
                 index: index.as_raw_ptr(),
                 value: 0,
             }),
-            GetName::VoiceColor(index) => Some(ffi::Message {
+            GetName::VoiceColor(index) => Some(FlMessage {
                 id: 8,
                 index: index.as_raw_ptr(),
                 value: 0,
             }),
-            GetName::OutVoice(index) => Some(ffi::Message {
+            GetName::OutVoice(index) => Some(FlMessage {
                 id: 9,
                 index: index.as_raw_ptr(),
                 value: 0,
@@ -952,8 +953,8 @@ pub enum Event {
     Unknown,
 }
 
-impl From<ffi::Message> for Event {
-    fn from(message: ffi::Message) -> Self {
+impl From<FlMessage> for Event {
+    fn from(message: FlMessage) -> Self {
         trace!("Event::from {:?}", message);
 
         let result = match message.id {

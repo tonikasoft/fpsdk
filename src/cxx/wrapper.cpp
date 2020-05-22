@@ -1,7 +1,8 @@
 #include "wrapper.h"
 #include "fp_plugclass.h"
-#include "src/lib.rs.h"
+#include <_types/_uint8_t.h>
 #include <cstring>
+#include <stdlib.h>
 
 intptr_t init_p_notes_params(int target, int flags, int ch_num, int pat_num,
                              TNoteParams *notes, int len) {
@@ -16,13 +17,6 @@ intptr_t init_p_notes_params(int target, int flags, int ch_num, int pat_num,
     memmove(params->NoteParams, notes, sizeof(TNoteParams) * len);
 
     return (intptr_t)params;
-}
-
-TimeSignature time_sig_from_raw(intptr_t raw_time_sig) {
-    PTimeSigInfo time_sig = (TTimeSigInfo *)raw_time_sig;
-
-    return {(uint32_t)time_sig->StepsPerBar, (uint32_t)time_sig->StepsPerBeat,
-            (uint32_t)time_sig->PPQ};
 }
 
 char *alloc_real_cstr(char *rust_cstr) {
@@ -67,11 +61,6 @@ void *create_plug_instance_c(void *host, intptr_t tag, void *adapter) {
 
     free_rbox_raw(info);
 
-    int ver = ((TFruityPlugHost *)host)->HostVersion;
-    std::string sver = std::to_string(ver);
-    fplog(rust::Str(sver.c_str()));
-    fplog(rust::Str("host version above"));
-
     PluginWrapper *wrapper = new PluginWrapper(
         (TFruityPlugHost *)host, tag, (PluginAdapter *)adapter, c_info);
 
@@ -109,14 +98,14 @@ intptr_t _stdcall PluginWrapper::Dispatcher(intptr_t id, intptr_t index,
     // host->Dispatcher(HostTag, FHD_WantMIDIInput, 0, value);
     // }
 
-    Message message = {id, index, value};
+    FlMessage message = {id, index, value};
 
     return plugin_dispatcher(adapter, message);
 }
 
 void _stdcall PluginWrapper::GetName(int section, int index, int value,
                                      char *name) {
-    Message message = {
+    FlMessage message = {
         (intptr_t)section,
         (intptr_t)index,
         (intptr_t)value,
@@ -129,7 +118,7 @@ void _stdcall PluginWrapper::GetName(int section, int index, int value,
 
 int _stdcall PluginWrapper::ProcessEvent(int event_id, int event_value,
                                          int flags) {
-    Message message = {
+    FlMessage message = {
         (intptr_t)event_id,
         (intptr_t)event_value,
         (intptr_t)flags,
@@ -141,7 +130,7 @@ int _stdcall PluginWrapper::ProcessEvent(int event_id, int event_value,
 }
 
 int _stdcall PluginWrapper::ProcessParam(int index, int value, int rec_flags) {
-    Message message = {
+    FlMessage message = {
         (intptr_t)index,
         (intptr_t)value,
         (intptr_t)rec_flags,
@@ -194,7 +183,7 @@ void _stdcall PluginWrapper::Voice_Kill(TVoiceHandle handle) {
 int _stdcall PluginWrapper::Voice_ProcessEvent(TVoiceHandle handle,
                                                int event_id, int event_value,
                                                int flags) {
-    Message message = {
+    FlMessage message = {
         (intptr_t)event_id,
         (intptr_t)event_value,
         (intptr_t)flags,
@@ -213,15 +202,7 @@ void _stdcall PluginWrapper::NewTick() { plugin_tick(adapter); }
 
 void _stdcall PluginWrapper::MIDITick() { plugin_midi_tick(adapter); }
 
-void _stdcall PluginWrapper::MIDIIn(int &msg) {
-    MidiMessage message = {
-        (uint8_t)(msg & 0xff),
-        (uint8_t)((msg >> 8) & 0xff),
-        (uint8_t)((msg >> 16) & 0xff),
-        (int)((msg >> 24) & 0xff),
-    };
-    plugin_midi_in(adapter, message);
-}
+void _stdcall PluginWrapper::MIDIIn(int &msg) { plugin_midi_in(adapter, msg); }
 
 void _stdcall PluginWrapper::MsgIn(intptr_t msg) {
     plugin_loop_in(adapter, msg);
@@ -231,7 +212,7 @@ int _stdcall PluginWrapper::OutputVoice_ProcessEvent(TOutVoiceHandle handle,
                                                      int event_id,
                                                      int event_value,
                                                      int flags) {
-    Message message = {
+    FlMessage message = {
         (intptr_t)event_id,
         (intptr_t)event_value,
         (intptr_t)flags,
@@ -245,7 +226,7 @@ void _stdcall PluginWrapper::OutputVoice_Kill(TVoiceHandle handle) {
 }
 
 // host
-intptr_t host_on_message(void *host, TPluginTag tag, Message message) {
+intptr_t host_on_message(void *host, TPluginTag tag, FlMessage message) {
     return ((TFruityPlugHost *)host)
         ->Dispatcher(tag, message.id, message.index, message.value);
 }
@@ -353,7 +334,7 @@ bool prompt_show(void *host, int x, int y, char *msg, char *result,
 
 // Host voice-related
 
-intptr_t host_on_voice_event(void *host, intptr_t tag, Message message) {
+intptr_t host_on_voice_event(void *host, intptr_t tag, FlMessage message) {
     return ((TFruityPlugHost *)host)
         ->Voice_ProcessEvent((TOutVoiceHandle)tag, message.id, message.index,
                              message.value);
@@ -381,7 +362,7 @@ void host_kill_out_voice(void *host, intptr_t tag) {
     ((TFruityPlugHost *)host)->OutputVoice_Kill((TOutVoiceHandle)tag);
 }
 
-intptr_t host_on_out_voice_event(void *host, intptr_t tag, Message message) {
+intptr_t host_on_out_voice_event(void *host, intptr_t tag, FlMessage message) {
     return ((TFruityPlugHost *)host)
         ->OutputVoice_ProcessEvent((TOutVoiceHandle)tag, message.id,
                                    message.index, message.value);
