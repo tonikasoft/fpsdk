@@ -1,8 +1,12 @@
 [package]
-name = "fpsdk"
-version = "0.1.0"
-authors = ["Ales Tsurko <ales.tsurko@gmail.com>"]
+authors = ["Tonika <tonikasoft@gmail.com>"]
+description = "FL Studio SDK"
 edition = "2018"
+license-file = "LICENSE"
+name = "fpsdk"
+readme = "README.md"
+repository = "https://github.com/tonikasoft/fpsdk"
+version = "1.0.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
