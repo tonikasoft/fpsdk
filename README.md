@@ -1,3 +1,5 @@
+![docs](https://docs.rs/fpsdk/badge.svg)
+
 # fpsdk
 
 Rust port of [FL Studio SDK](https://www.image-line.com/developers/index.php).
