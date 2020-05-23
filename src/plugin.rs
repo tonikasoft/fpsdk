@@ -13,7 +13,7 @@ use log::{debug, error};
 use crate::host::{self, Event, GetName, Host};
 use crate::voice::ReceiveVoiceHandler;
 use crate::{
-    alloc_real_cstr, FlMessage, intptr_t, AsRawPtr, MidiMessage, ProcessParamFlags, ValuePtr,
+    alloc_real_cstr, intptr_t, AsRawPtr, FlMessage, MidiMessage, ProcessParamFlags, ValuePtr,
     CURRENT_SDK_VERSION,
 };
 
@@ -499,10 +499,7 @@ unsafe extern "C" fn plugin_name_of(
 /// Unsafe
 #[doc(hidden)]
 #[no_mangle]
-unsafe extern "C" fn plugin_process_event(
-    adapter: *mut PluginAdapter,
-    event: FlMessage,
-) -> intptr_t {
+unsafe extern "C" fn plugin_process_event(adapter: *mut PluginAdapter, event: FlMessage) -> c_int {
     (*adapter).0.process_event(event.into());
     0
 }

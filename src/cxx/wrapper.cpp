@@ -1,6 +1,5 @@
 #include "wrapper.h"
 #include "fp_plugclass.h"
-#include <_types/_uint8_t.h>
 #include <cstring>
 #include <stdlib.h>
 
@@ -27,22 +26,20 @@ char *alloc_real_cstr(char *rust_cstr) {
     return result;
 }
 
-int32_t istream_read(void *istream, uint8_t *data, uint32_t size,
-                     uint32_t *read) {
+int istream_read(void *istream, unsigned char *data, unsigned int size,
+                 unsigned int *read) {
     if (!data || size < 1)
         return 0x80004003; // E_POINTER
 
-    return (int32_t)((IStream *)istream)
-        ->Read(data, size, (unsigned long *)read);
+    return (int)((IStream *)istream)->Read(data, size, (unsigned long *)read);
 }
 
-int32_t istream_write(void *istream, const uint8_t *data, uint32_t size,
-                      uint32_t *write) {
+int istream_write(void *istream, const unsigned char *data, unsigned int size,
+                  unsigned int *write) {
     if (!data || size < 1)
         return 0x80004003; // E_POINTER
 
-    return (int32_t)((IStream *)istream)
-        ->Write(data, size, (unsigned long *)write);
+    return (int)((IStream *)istream)->Write(data, size, (unsigned long *)write);
 }
 
 void *create_plug_instance_c(void *host, intptr_t tag, void *adapter) {
@@ -136,7 +133,7 @@ int _stdcall PluginWrapper::ProcessParam(int index, int value, int rec_flags) {
         (intptr_t)rec_flags,
     };
 
-    return plugin_process_param(adapter, message);
+    return (int)plugin_process_param(adapter, message);
 }
 
 void _stdcall PluginWrapper::Idle_Public() { plugin_idle(adapter); }
@@ -189,7 +186,7 @@ int _stdcall PluginWrapper::Voice_ProcessEvent(TVoiceHandle handle,
         (intptr_t)flags,
     };
 
-    return voice_handler_on_event(adapter, (void *)handle, message);
+    return (int)voice_handler_on_event(adapter, (void *)handle, message);
 }
 
 int _stdcall PluginWrapper::Voice_Render(TVoiceHandle, PWAV32FS, int &) {
@@ -218,7 +215,7 @@ int _stdcall PluginWrapper::OutputVoice_ProcessEvent(TOutVoiceHandle handle,
         (intptr_t)flags,
     };
 
-    return out_voice_handler_on_event(adapter, handle, message);
+    return (int)out_voice_handler_on_event(adapter, handle, message);
 }
 
 void _stdcall PluginWrapper::OutputVoice_Kill(TVoiceHandle handle) {
@@ -315,11 +312,11 @@ TIOBuffer host_get_output_buf(void *host, TPluginTag tag, intptr_t offset) {
 }
 
 void *host_get_insert_buf(void *host, TPluginTag tag, intptr_t offset) {
-    return ((TFruityPlugHost *)host)->GetInsBuffer(tag, offset);
+    return ((TFruityPlugHost *)host)->GetInsBuffer(tag, (int)offset);
 }
 
 void *host_get_mix_buf(void *host, intptr_t offset) {
-    return ((TFruityPlugHost *)host)->GetMixBuffer(offset);
+    return ((TFruityPlugHost *)host)->GetMixBuffer((int)offset);
 }
 
 void *host_get_send_buf(void *host, intptr_t offset) {
@@ -348,10 +345,10 @@ void host_release_voice(void *host, intptr_t tag) {
     ((TFruityPlugHost *)host)->Voice_Release(tag);
 }
 
-intptr_t host_trig_out_voice(void *host, Params *params, int32_t index,
+intptr_t host_trig_out_voice(void *host, Params *params, int index,
                              intptr_t tag) {
     return (intptr_t)((TFruityPlugHost *)host)
-        ->TriggerOutputVoice((TVoiceParams *)params, index, tag);
+        ->TriggerOutputVoice((TVoiceParams *)params, (intptr_t)index, tag);
 }
 
 void host_release_out_voice(void *host, intptr_t tag) {

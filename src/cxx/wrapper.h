@@ -12,14 +12,14 @@ struct FlMessage {
 
 // from plugin.rs
 struct Info {
-    uint32_t sdk_version;
+    unsigned int sdk_version;
     char *long_name;
     char *short_name;
-    uint32_t flags;
-    uint32_t num_params;
-    uint32_t def_poly;
-    uint32_t num_out_ctrls;
-    uint32_t num_out_voices;
+    unsigned int flags;
+    unsigned int num_params;
+    unsigned int def_poly;
+    unsigned int num_out_ctrls;
+    unsigned int num_out_voices;
 };
 
 // from voice.rs
@@ -84,8 +84,7 @@ extern "C" void *create_plug_instance_c(void *host, intptr_t tag,
 extern "C" Info *plugin_info(PluginAdapter *adapter);
 extern "C" intptr_t plugin_dispatcher(PluginAdapter *adapter,
                                       FlMessage message);
-extern "C" intptr_t plugin_process_event(PluginAdapter *adapter,
-                                         FlMessage event);
+extern "C" int plugin_process_event(PluginAdapter *adapter, FlMessage event);
 extern "C" intptr_t plugin_process_param(PluginAdapter *adapter,
                                          FlMessage event);
 extern "C" char *plugin_name_of(const PluginAdapter *adapter,
@@ -115,10 +114,10 @@ extern "C" intptr_t out_voice_handler_on_event(PluginAdapter *adapter,
                                                intptr_t tag, FlMessage message);
 
 // IStream
-extern "C" int32_t istream_read(void *istream, uint8_t *data, uint32_t size,
-                                uint32_t *read);
-extern "C" int32_t istream_write(void *istream, const uint8_t *data,
-                                 uint32_t size, uint32_t *write);
+extern "C" int istream_read(void *istream, unsigned char *data,
+                            unsigned int size, unsigned int *read);
+extern "C" int istream_write(void *istream, const unsigned char *data,
+                             unsigned int size, unsigned int *write);
 
 // Host
 extern "C" intptr_t host_on_message(void *host, TPluginTag tag,
@@ -159,8 +158,8 @@ extern "C" void host_release_voice(void *host, intptr_t tag);
 extern "C" void host_kill_voice(void *host, intptr_t tag);
 extern "C" intptr_t host_on_voice_event(void *host, intptr_t tag,
                                         FlMessage message);
-extern "C" intptr_t host_trig_out_voice(void *host, Params *params,
-                                        int32_t index, intptr_t tag);
+extern "C" intptr_t host_trig_out_voice(void *host, Params *params, int index,
+                                        intptr_t tag);
 extern "C" void host_release_out_voice(void *host, intptr_t tag);
 extern "C" void host_kill_out_voice(void *host, intptr_t tag);
 extern "C" intptr_t host_on_out_voice_event(void *host, intptr_t tag,
