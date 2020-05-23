@@ -3,8 +3,8 @@
 #endif
 #include "fp_plugclass.h"
 
-#ifdef __APPLE__
-#include <strings.h>
+#if defined (__APPLE__) || defined (__linux__)
+#include <string.h>
 #endif
 
 // destroy the object

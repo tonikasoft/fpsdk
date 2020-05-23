@@ -2,7 +2,7 @@
 #define FP_DEF_H
 
 #include "math.h"
-#ifndef __APPLE__
+#if !defined (__APPLE__) && !defined (__linux__)
 #include "mmsystem.h"
 #endif
 
@@ -47,7 +47,7 @@ typedef struct
 // extended wav format
 typedef struct
 {
-#ifndef __APPLE__
+#if !defined (__APPLE__) && !defined (__linux__)
     WAVEFORMATEX WaveFormatEx;
 #endif
     union
@@ -56,7 +56,7 @@ typedef struct
         {
             unsigned short wValidBitsPerSample;   // bits of precision
             unsigned long dwChannelMask;          // which channels are present in stream
-#ifndef __APPLE__
+#if !defined (__APPLE__) && !defined (__linux__)
             GUID SubFormat;
 #endif
         } stream;

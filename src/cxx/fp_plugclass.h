@@ -19,14 +19,14 @@ LockMix_Shared / UnlockMix_Shared
 #ifndef FP_PLUGCLASS_H
 #define FP_PLUGCLASS_H
 
-#ifdef __APPLE__
+#if defined (__APPLE__) || defined (__linux__) 
 #include <stdint.h>
 #else
 #include <objidl.h>
 #endif
 #include "fp_def.h"
 
-#ifdef __APPLE__
+#if defined (__APPLE__) || defined (__linux__)
 #define _stdcall
 #define __stdcall
 #define BOOL int
@@ -47,7 +47,7 @@ typedef long long LARGE_INTEGER;
 #pragma pack(4)
 
 
-#ifdef __APPLE__
+#if defined (__APPLE__) || defined (__linux__)
 #define STDMETHODCALLTYPE __stdcall
 class IStream
 {
