@@ -309,7 +309,7 @@ impl From<TimeFormat> for u8 {
     }
 }
 
-/// Time
+/// Time.
 ///
 /// The first value is mixing time.
 ///
@@ -354,9 +354,9 @@ pub struct NameColor {
     pub index: usize,
 }
 
-/// Type used in FFI for [`NameColor`](struct.NameColor.html).
+// Type used in FFI for [`NameColor`](struct.NameColor.html).
 #[repr(C)]
-pub struct TNameColor {
+struct TNameColor {
     name: [u8; 256],
     vis_name: [u8; 256],
     color: c_int,
@@ -432,7 +432,7 @@ impl From<c_int> for MidiMessage {
 
 /// Collection of notes, which you can add to the piano roll using
 /// [`Host::on_message`](host/struct.Host.html#on_message.new) with message
-/// [`plugin::Message::AddToPianoRoll`](../plugin/enum.Message.html#variant.AddToPianoRoll).
+/// [`plugin::message::AddToPianoRoll`](./plugin/message/struct.AddToPianoRoll.html).
 #[derive(Debug)]
 pub struct Notes {
     // 0=step seq (not supported yet), 1=piano roll
@@ -472,7 +472,7 @@ pub struct Note {
 }
 
 bitflags! {
-    /// Notes parameters flags
+    /// Notes parameters flags.
     pub struct NotesFlags: isize {
         /// Delete everything currently on the piano roll before adding the notes.
         const EMPTY_FIRST = 1;
@@ -520,7 +520,7 @@ pub struct ParamMenuEntry {
 }
 
 bitflags! {
-    /// Parameter popup menu item flags
+    /// Parameter popup menu item flags.
     pub struct ParamMenuItemFlags: i32 {
         /// The item is disabled
         const DISABLED = 1;
@@ -592,7 +592,7 @@ bitflags! {
 }
 
 bitflags! {
-    /// Processing parameters flags
+    /// Processing parameters flags.
     pub struct ProcessParamFlags: isize {
         /// Update the value of the parameter.
         const UPDATE_VALUE = 1;
@@ -619,7 +619,7 @@ bitflags! {
 }
 
 bitflags! {
-    /// Sample loading flags
+    /// Sample loading flags.
     pub struct SampleLoadFlags: isize {
         ///This tells the sample loader to show an open box, for the user to select a sample
         const SHOW_DIALOG = 1;

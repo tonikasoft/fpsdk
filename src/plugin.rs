@@ -53,7 +53,7 @@ macro_rules! create_plugin {
 
 /// This trait must be implemented for your plugin.
 pub trait Plugin: std::fmt::Debug + RefUnwindSafe + Send + Sync + 'static {
-    /// Initializer
+    /// Initializer.
     fn new(host: Host, tag: Tag) -> Self
     where
         Self: Sized;
@@ -107,11 +107,11 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe + Send + Sync + 'static {
     /// Called from GUI thread.
     fn idle(&mut self) {}
     /// Gets called before a new tick is mixed (not played), if the plugin added
-    /// [`PluginBuilder::want_new_tick`](../struct.InfoBuilder.html#method.want_new_tick) into
+    /// [`InfoBuilder::want_new_tick`](../plugin/struct.InfoBuilder.html#method.want_new_tick) into
     /// [`Info`](../struct.Info.html).
     ///
     /// Internal controller plugins should call
-    /// [`host::Host::on_control_change`](../host/struct.Host.html#method.on_control_change) from
+    /// [`host::Host::on_controller`](../host/struct.Host.html#method.on_controller) from
     /// here.
     ///
     /// Called from mixer thread.
@@ -135,7 +135,7 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe + Send + Sync + 'static {
     /// The host will call this when there's new MIDI data available. This function is only called
     /// when the plugin has called the
     /// [`host::Host::on_message`](../host/struct.Host.html#method.on_message) with
-    /// [`plugin::PluginMessage::WantMidiInput`](enum.PluginMessage.html#variant.WantMidiInput) and
+    /// [`plugin::message::WantMidiInput`](../plugin/message/struct.WantMidiInput.html) and
     /// value set to `true`.
     ///
     /// Can be called from GUI or mixer threads.
@@ -155,21 +155,21 @@ pub trait Plugin: std::fmt::Debug + RefUnwindSafe + Send + Sync + 'static {
 #[derive(Debug)]
 pub struct Info {
     /// This has to be the version of the SDK used to create the plugin. This value is
-    /// available in the constant CurrentSDKVersion
+    /// available in the constant CurrentSDKVersion.
     pub sdk_version: u32,
-    /// The name of the plugin dll, without the extension (.dll)
+    /// The name of the plugin dll, without the extension (.dll).
     pub long_name: *mut c_char,
     /// Short plugin name, to be used in labels to tell the user which plugin he is working
-    /// with
+    /// with.
     pub short_name: *mut c_char,
     flags: u32,
-    /// The number of parameters for this plugin
+    /// The number of parameters for this plugin.
     pub num_params: u32,
-    /// Preferred (default) maximum polyphony (FL Studio manages the polyphony) (0=infinite)
+    /// Preferred (default) maximum polyphony (FL Studio manages the polyphony) (0=infinite).
     pub def_poly: u32,
-    /// Number of internal output controllers
+    /// Number of internal output controllers.
     pub num_out_ctrls: u32,
-    /// Number of internal output voices
+    /// Number of internal output voices.
     pub num_out_voices: u32,
 }
 

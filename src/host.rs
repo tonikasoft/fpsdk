@@ -87,8 +87,8 @@ impl Host {
 
     /// Let the host show a hint, as specified by the parameters.
     ///
-    /// - `tag` - the plugin's tag
-    /// - `text` - the text to show as a hint
+    /// - `tag` - the plugin's tag.
+    /// - `text` - the text to show as a hint.
     ///
     /// There is one extra feature of parameter hints. It is possible to tell FL Studio to show
     /// little icons next to the hint, that have a special meaning. For the moment there are three
@@ -101,11 +101,11 @@ impl Host {
     /// - `"^d"` - shows a mouse with the right button clicked, to denote a control that has a
     /// popup menu.
     /// - `"^e"` - shows an unhappy smiley, to use when something went wrong.
-    /// - `"^f"` - shows a left-pointing arrow
-    /// - `"^g"` - shows a double right-pointing arrow, for fast forward
-    /// - `"^h"` - is an exclamation mark, for a warning to the user
-    /// - `"^i"` - is an hourglass
-    /// - `"^j"` - shows a double left-pointing arrow, for fast reverse
+    /// - `"^f"` - shows a left-pointing arrow.
+    /// - `"^g"` - shows a double right-pointing arrow, for fast forward.
+    /// - `"^h"` - is an exclamation mark, for a warning to the user.
+    /// - `"^i"` - is an hourglass.
+    /// - `"^j"` - shows a double left-pointing arrow, for fast reverse.
     pub fn on_hint(&mut self, tag: plugin::Tag, text: String) {
         unsafe {
             host_on_hint(
@@ -221,13 +221,14 @@ impl Host {
 
     /// Get one of the buffers.
     ///
-    /// - `kind` the kind of the buffer you want to get (see [`Buffer`](../enum.Buffer.html)).
+    /// - `kind` the kind of the buffer you want to get 
+    ///   (see [`host::Buffer`](../host/enum.Buffer.html)).
     /// - `length` is the buffer length (use the length of the output buffer passed to the render
     ///   function).
     ///
     /// The buffers are valid only during
-    /// [`Plugin::render`](../plugin/trait.Plugin.html#method.render) (i.e. it's supposed to be
-    /// used inside this method only).
+    /// [`Plugin::render`](../plugin/trait.Plugin.html#method.render) (i.e. it's supposed to be used
+    /// inside this method only).
     pub fn buffer(
         &mut self,
         tag: plugin::Tag,
@@ -555,7 +556,7 @@ extern "C" {
     fn host_on_out_voice_event(host: *mut c_void, tag: intptr_t, message: FlMessage) -> intptr_t;
 }
 
-/// Message from the host to the plugin
+/// Message from the host to the plugin.
 #[derive(Debug)]
 pub enum Message<'a> {
     /// Contains the handle of the parent window if the editor has to be shown.
@@ -566,7 +567,7 @@ pub enum Message<'a> {
     ProcessMode(ProcessModeFlags),
     /// The continuity of processing is broken. This means that the user has jumped ahead or back
     /// in the playlist, for example. When this happens, the plugin needs to clear all buffers and
-    /// start like new
+    /// start like new.
     ///
     /// **Warning: this can be called from the mixer thread!**
     Flush,
@@ -576,12 +577,12 @@ pub enum Message<'a> {
     SetBlockSize(u32),
     /// This changes the sample rate.
     ///
-    /// Value holds the new sample rate
+    /// Value holds the new sample rate.
     SetSampleRate(u32),
     /// This allows the plugin to define how the editor window should be resized.
     ///
     /// The first value will hold a pointer to a rectangle (PRect) for the minimum (Left and Top)
-    /// and maximum (Right and Bottom) width and height of the window
+    /// and maximum (Right and Bottom) width and height of the window.
     ///
     /// The second value holds a pointer (PPoint) to a point structure that defines by how much the
     /// window size should change horizontally and vertically when the user drags the border.
@@ -589,18 +590,18 @@ pub enum Message<'a> {
     /// (not used yet) The host has noticed that too much processing power is used and asks the
     /// plugin to kill its weakest voice.
     ///
-    /// The plugin has to return `true` if it did anything, `false` otherwise
+    /// The plugin has to return `true` if it did anything, `false` otherwise.
     KillVoice,
     /// Only full generators have to respond to this message. It's meant to allow the cutoff and
     /// resonance parameters of a voice to be used for other purposes, if the generator doesn't use
     /// them as cutoff and resonance.
     ///
-    /// - return `0u8` if the plugin doesn't support the default per-voice level value
+    /// - return `0u8` if the plugin doesn't support the default per-voice level value.
     /// - return `1u8` if the plugin supports the default per-voice level value (filter cutoff (0)
-    ///   or filter resonance (1))
+    ///   or filter resonance (1)).
     /// - return `2u8` if the plugin supports the per-voice level value, but for another function
     ///   (then check [`GetName::VoiceLevel`](../host/enum.GetName.html#variant.VoiceLevel) to
-    ///   provide your own names)
+    ///   provide your own names).
     UseVoiceLevels(u8),
     /// Called when the user selects a preset.
     ///
@@ -622,11 +623,11 @@ pub enum Message<'a> {
     ///
     /// The value is playing status.
     ///
-    /// **Warning: can be called from the mixing thread**
+    /// **Warning: can be called from the mixing thread.**
     SetPlaying(bool),
-    /// The song position has jumped from one position to another non-consecutive position
+    /// The song position has jumped from one position to another non-consecutive position.
     ///
-    /// **Warning: can be called from the mixing thread**
+    /// **Warning: can be called from the mixing thread.**
     SongPosChanged,
     /// The time signature has changed.
     ///
@@ -652,44 +653,44 @@ pub enum Message<'a> {
     ///
     /// The value holds filename.
     LoadFile(String),
-    /// Set fit to time in beats
+    /// Set fit to time in beats.
     ///
     /// The value holds the time.
     SetFitTime(f32),
     /// Sets the number of samples in each tick. This value changes when the tempo, ppq or sample
     /// rate have changed.
     ///
-    /// **Warning: can be called from the mixing thread**
+    /// **Warning: can be called from the mixing thread.**
     SetSamplesPerTick(f32),
     /// Sets the frequency at which Idle is called.
     ///
-    /// The value holds the new time (milliseconds)
+    /// The value holds the new time (milliseconds).
     SetIdleTime(u64),
     /// (FL 7.0) The host has focused/unfocused the editor (focused in the value) (plugin can use
-    /// this to steal keyboard focus)
+    /// this to steal keyboard focus).
     SetFocus(bool),
     /// (FL 8.0) This is sent by the host for special transport messages, from a controller.
     ///
-    /// The value is the type of message (see [`Transport`](../enum.Transport.html))
+    /// The value is the type of message (see [`Transport`](../enum.Transport.html)).
     ///
-    /// Result should be `true` if handled, `false` otherwise
+    /// Result should be `true` if handled, `false` otherwise.
     Transport(Transport),
     /// (FL 8.0) Live MIDI input preview. This allows the plugin to steal messages (mostly for
     /// transport purposes).
     ///
     /// The value has the packed MIDI message. Only note on/off for now.
     ///
-    /// Result should be `true` if handled, `false` otherwise
+    /// Result should be `true` if handled, `false` otherwise.
     MidiIn(MidiMessage),
     /// Mixer routing changed, must use
     /// [`PluginMessage::GetInOuts`](../plugin/enum.PluginMessage.html#variant.GetInOuts) if
-    /// necessary
+    /// necessary.
     RoutingChanged,
     /// Retrieves info about a parameter.
     ///
     /// The value is the parameter number.
     ///
-    /// see [`ParameterFlags`](../struct.ParameterFlags.html) for the result
+    /// see [`ParameterFlags`](../struct.ParameterFlags.html) for the result.
     GetParamInfo(usize),
     /// Called after a project has been loaded, to leave a chance to kill automation (that could be
     /// loaded after the plugin is created) if necessary.
@@ -709,8 +710,8 @@ pub enum Message<'a> {
     ///
     /// Result has to be:
     ///
-    /// * `0i32` - default number
-    /// * `-1i32` - none
+    /// * `0i32` - default number.
+    /// * `-1i32` - none.
     PreferredNumIo(u8),
     /// Unknown message.
     Unknown,
