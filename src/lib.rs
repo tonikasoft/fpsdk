@@ -94,6 +94,14 @@ macro_rules! implement_tag {
     };
 }
 
+pub fn add_child_window_s(parent: *mut c_void, child: *mut c_void) {
+    unsafe { add_child_window(parent, child) };
+}
+
+extern "C" {
+    fn add_child_window(parent: *mut c_void, child: *mut c_void);
+}
+
 #[derive(Debug, Clone)]
 #[repr(C)]
 struct FlMessage {
@@ -396,7 +404,7 @@ impl FromRawPtr for TNameColor {
 }
 
 /// MIDI message.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MidiMessage {
     /// Status byte.
     pub status: u8,
@@ -649,7 +657,7 @@ bitflags! {
 /// if `Cut`, `Copy`, `Paste`, `Insert`, `Delete`, `NextWindow`, `Enter`, `Escape`, `Yes`, `No`,
 /// `Fx` don't answer, standard keystrokes will be simulated
 #[allow(missing_docs)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Transport {
     /// Generic jog (can be used to select stuff).
     Jog(Jog),
@@ -808,15 +816,15 @@ impl From<FlMessage> for Transport {
 
 /// `0` for release, `1` for switch (if release is not supported), `2` for hold (if release should
 /// be expected).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Button(pub u8);
 
 /// `false` for release, `true` for hold.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Hold(pub bool);
 
 /// Value is an integer increment.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Jog(pub i64);
 
 bitflags! {

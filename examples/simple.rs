@@ -20,9 +20,11 @@ use fpsdk::plugin::message;
 use fpsdk::plugin::{self, Info, InfoBuilder, Plugin, StateReader, StateWriter};
 use fpsdk::voice::{self, ReceiveVoiceHandler, SendVoiceHandler, Voice};
 use fpsdk::{
-    create_plugin, AsRawPtr, FromRawPtr, MessageBoxFlags, MidiMessage, Note, Notes, NotesFlags,
-    ProcessParamFlags, TimeFormat, ValuePtr,
+    add_child_window_s, create_plugin, AsRawPtr, FromRawPtr, MessageBoxFlags, MidiMessage, Note,
+    Notes, NotesFlags, ProcessParamFlags, TimeFormat, ValuePtr,
 };
+
+use ui::init_window;
 
 static ONCE: Once = Once::new();
 const LOG_PATH: &str = "simple.log";
@@ -119,7 +121,14 @@ impl Plugin for Simple {
         );
 
         if let host::Message::SetEnabled(enabled) = message {
-            self.on_set_enabled(enabled, message);
+            self.on_set_enabled(enabled, message.clone());
+        }
+
+        if let host::Message::ShowEditor(Some(parent)) = message {
+            let window = init_window();
+            let handle = window.get_window_handle();
+            info!("got window handle {:?}", handle);
+            add_child_window_s(parent, handle);
         }
 
         // self.host.midi_out(self.tag, MidiMessage {
