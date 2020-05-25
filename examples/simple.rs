@@ -1,3 +1,5 @@
+pub mod ui;
+
 use std::collections::HashMap;
 #[cfg(unix)]
 use std::fs::OpenOptions;

@@ -45,16 +45,15 @@ int istream_write(void *istream, const unsigned char *data, unsigned int size,
 void *create_plug_instance_c(void *host, intptr_t tag, void *adapter) {
     Info *info = plugin_info((PluginAdapter *)adapter);
 
-    int reserved[30] = {0};
-    PFruityPlugInfo c_info = new TFruityPlugInfo{(int)info->sdk_version,
-                                                 info->long_name,
-                                                 info->short_name,
-                                                 (int)info->flags,
-                                                 (int)info->num_params,
-                                                 (int)info->def_poly,
-                                                 (int)info->num_out_ctrls,
-                                                 (int)info->num_out_voices,
-                                                 {*reserved}};
+    PFruityPlugInfo c_info = (TFruityPlugInfo *)malloc(sizeof(TFruityPlugInfo));
+    c_info->SDKVersion = (int)info->sdk_version;
+    c_info->LongName = info->long_name;
+    c_info->ShortName = info->short_name;
+    c_info->Flags = (int)info->flags;
+    c_info->NumParams = (int)info->num_params;
+    c_info->DefPoly = (int)info->def_poly;
+    c_info->NumOutCtrls = (int)info->num_out_ctrls;
+    c_info->NumOutVoices = (int)info->num_out_voices;
 
     free_rbox_raw(info);
 
@@ -76,7 +75,7 @@ PluginWrapper::PluginWrapper(TFruityPlugHost *host_ptr, TPluginTag tag,
 PluginWrapper::~PluginWrapper() {
     free(Info->LongName);
     free(Info->ShortName);
-    delete Info;
+    free(Info);
     free_rbox_raw(adapter);
 }
 
