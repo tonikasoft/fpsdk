@@ -18,8 +18,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-      - name: Update Rust
-        run: rustup update
+      - name: Install xkbcommon
+        run: sudo apt-get install libxkbcommon-dev
       - name: Build
         run: cargo build --verbose
       - name: Run tests
