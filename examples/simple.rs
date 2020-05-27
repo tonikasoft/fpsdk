@@ -21,7 +21,7 @@ use fpsdk::plugin::{self, Info, InfoBuilder, Plugin, StateReader, StateWriter};
 use fpsdk::voice::{self, ReceiveVoiceHandler, SendVoiceHandler, Voice};
 use fpsdk::{
     add_child_window_s, create_plugin, AsRawPtr, FromRawPtr, MessageBoxFlags, MidiMessage, Note,
-    Notes, NotesFlags, ProcessParamFlags, TimeFormat, ValuePtr,
+    Notes, NotesFlags, ProcessParamFlags, TimeFormat, ValuePtr, VstView,
 };
 
 use ui::init_window;
@@ -36,6 +36,7 @@ struct Simple {
     param_names: Vec<String>,
     state: State,
     voice_handler: SimpleVoiceHandler,
+    view: Option<VstView>,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -64,6 +65,7 @@ impl Plugin for Simple {
                 "Parameter 3".into(),
             ],
             state: Default::default(),
+            view: None,
         }
     }
 
@@ -72,6 +74,7 @@ impl Plugin for Simple {
 
         InfoBuilder::new_full_gen("Simple", "Simple", self.param_names.len() as u32)
             // InfoBuilder::new_effect("Simple", "Simple", self.param_names.len() as u32)
+            .mac_needs_nsview()
             .want_new_tick()
             .with_out_ctrls(1)
             .with_out_voices(1)
@@ -125,12 +128,22 @@ impl Plugin for Simple {
         }
 
         if let host::Message::ShowEditor(Some(parent)) = message {
-            let window = init_window();
-            let handle = window.get_window_handle();
-            info!("got window handle {:?}", handle);
-            add_child_window_s(parent, handle);
+            if !parent.is_null() {
+                if self.view.is_none() {
+                    self.view = Some(VstView::new(parent));
+                }
+                self.view.as_mut().unwrap().open();
+            }
+            // let window = init_window();
+            // let handle = window.get_window_handle();
+            // info!("got window handle {:?}", handle);
+            // add_child_window_s(parent, handle);
         }
-
+        // if let host::Message::ShowEditor(None) = message {
+        // if self.view.is_some() {
+        // self.view.unwrap().close();
+        // }
+        // }
         // self.host.midi_out(self.tag, MidiMessage {
         // status: 0x90,
         // data1: 60,

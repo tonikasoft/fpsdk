@@ -90,9 +90,9 @@ void _stdcall PluginWrapper::SaveRestoreState(IStream *stream, BOOL save) {
 intptr_t _stdcall PluginWrapper::Dispatcher(intptr_t id, intptr_t index,
                                             intptr_t value) {
 
-    // if (id == FPD_SetEnabled) {
-    // host->Dispatcher(HostTag, FHD_WantMIDIInput, 0, value);
-    // }
+    if (id == FPD_ShowEditor) {
+        EditorHandle = value;
+    }
 
     FlMessage message = {id, index, value};
 

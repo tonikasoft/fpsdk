@@ -13,8 +13,8 @@ use log::trace;
 use crate::plugin::{self, message};
 use crate::voice::{self, SendVoiceHandler, Voice};
 use crate::{
-    intptr_t, AsRawPtr, FlMessage, FromRawPtr, MidiMessage, ProcessModeFlags, TTimeSigInfo,
-    TimeSignature, Transport, ValuePtr, WAVETABLE_SIZE,
+    intptr_t, AsRawPtr, EditorHandle, FlMessage, FromRawPtr, MidiMessage, ProcessModeFlags,
+    TTimeSigInfo, TimeSignature, Transport, ValuePtr, WAVETABLE_SIZE,
 };
 
 /// Plugin host.
@@ -221,7 +221,7 @@ impl Host {
 
     /// Get one of the buffers.
     ///
-    /// - `kind` the kind of the buffer you want to get 
+    /// - `kind` the kind of the buffer you want to get
     ///   (see [`host::Buffer`](../host/enum.Buffer.html)).
     /// - `length` is the buffer length (use the length of the output buffer passed to the render
     ///   function).
@@ -559,8 +559,9 @@ extern "C" {
 /// Message from the host to the plugin.
 #[derive(Debug, Clone)]
 pub enum Message<'a> {
-    /// Contains the handle of the parent window if the editor has to be shown.
-    ShowEditor(Option<*mut c_void>),
+    /// Contains the handle of the parent window if the editor has to be shown and `None` if the
+    /// editor has to be hidden.
+    ShowEditor(Option<EditorHandle>),
     /// Change the processing mode flags. This can be ignored.
     ///
     /// The value is [ProcessModeFlags](../struct.ProcessModeFlags.html).
@@ -764,10 +765,10 @@ impl From<FlMessage> for Message<'_> {
 
 impl Message<'_> {
     fn from_show_editor(message: FlMessage) -> Self {
-        if message.value == 1 {
-            Message::ShowEditor(None)
+        if message.value != 0 {
+            Message::ShowEditor(Some(EditorHandle::from_raw_ptr(message.value)))
         } else {
-            Message::ShowEditor(Some(message.value as *mut c_void))
+            Message::ShowEditor(None)
         }
     }
 

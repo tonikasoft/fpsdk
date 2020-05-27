@@ -57,7 +57,12 @@ use std::mem;
 use std::os::raw::{c_char, c_int, c_void};
 
 use bitflags::bitflags;
+#[cfg(target_os = "macos")]
+use cocoa::appkit::NSView;
+#[cfg(target_os = "macos")]
+use cocoa::base::id;
 use log::{debug, error};
+use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 
 /// Current FL SDK version.
 pub const CURRENT_SDK_VERSION: u32 = 1;
@@ -92,14 +97,6 @@ macro_rules! implement_tag {
             }
         }
     };
-}
-
-pub fn add_child_window_s(parent: *mut c_void, child: *mut c_void) {
-    unsafe { add_child_window(parent, child) };
-}
-
-extern "C" {
-    fn add_child_window(parent: *mut c_void, child: *mut c_void);
 }
 
 #[derive(Debug, Clone)]
@@ -249,6 +246,71 @@ impl ValuePtr {
 impl FromRawPtr for ValuePtr {
     fn from_raw_ptr(value: intptr_t) -> Self {
         ValuePtr(value)
+    }
+}
+
+/// Handle for view/window to which you can attach your view/window. Host sends it to you in
+/// [`host::Message::ShowEditor`](host/enum.Message.html#variant.ShowMessage) message.
+///
+/// It's NSView on macOS and HWND on Windows.
+///
+/// **Note: you need to call [`InfoBuilder::mac_needs_nsview`](
+/// plugin/struct.InfoBuilder.html#method.mac_needs_nsview) if you want to attach your view on
+/// macOS.**
+#[derive(Debug, Clone)]
+pub struct EditorHandle {
+    raw_handle: *mut c_void,
+}
+
+impl EditorHandle {
+    /// Constructor.
+    pub fn new(raw_handle: *mut c_void) -> Self {
+        Self { raw_handle }
+    }
+
+    /// Get raw pointer to the view/window handler (NSView on macOS or HWND on Windows).
+    pub fn raw_handle(&self) -> *mut c_void {
+        self.raw_handle
+    }
+    /// Attach your editor the handle.
+    pub fn attach_editor<V: HasRawWindowHandle>(&mut self, view: &mut V) {
+        // We make separate private implementations here, because docs on docs.rs is compiled under
+        // linux, so if we just use different attach_editor per platform, it'll be hidden on
+        // docs.rs.
+        #[cfg(target_os = "macos")]
+        unsafe {
+            self.attach_editor_mac(view)
+        };
+
+        #[cfg(target_os = "windows")]
+        unsafe {
+            self.attach_editor_win(view)
+        };
+    }
+
+    #[cfg(target_os = "macos")]
+    unsafe fn attach_editor_mac<V: HasRawWindowHandle>(&mut self, view: &mut V) {
+        if let RawWindowHandle::MacOS(handle) = view.raw_window_handle() {
+            if handle.ns_view.is_null() {
+                return;
+            }
+
+            let ns_view = handle.ns_view as id; // NSView
+            let parent_view = self.raw_handle as id; // NSView
+            parent_view.setFrameSize(ns_view.frame().size);
+            parent_view.addSubview_(ns_view);
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    unsafe fn attach_editor_win<V: HasRawWindowHandle>(&mut self, view: &mut V) {}
+}
+
+impl FromRawPtr for EditorHandle {
+    fn from_raw_ptr(value: intptr_t) -> Self {
+        Self {
+            raw_handle: value as *mut c_void,
+        }
     }
 }
 
