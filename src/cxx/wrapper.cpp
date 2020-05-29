@@ -91,7 +91,7 @@ intptr_t _stdcall PluginWrapper::Dispatcher(intptr_t id, intptr_t index,
                                             intptr_t value) {
 
     if (id == FPD_ShowEditor) {
-        EditorHandle = value;
+        EditorHandle = (HWND)value;
     }
 
     FlMessage message = {id, index, value};
