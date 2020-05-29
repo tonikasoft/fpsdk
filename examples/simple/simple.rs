@@ -1,4 +1,4 @@
-pub mod ui;
+pub mod gui;
 
 use std::collections::HashMap;
 #[cfg(unix)]
@@ -8,6 +8,12 @@ use std::sync::{Arc, Mutex, Once};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use bincode;
+#[cfg(target_os = "macos")]
+use cocoa::appkit::{NSBackingStoreType, NSColor, NSView, NSWindow, NSWindowStyleMask};
+#[cfg(target_os = "macos")]
+use cocoa::base::{id, nil};
+#[cfg(target_os = "macos")]
+use cocoa::foundation::{NSPoint, NSRect, NSSize};
 use log::{error, info, trace, LevelFilter};
 use serde::{Deserialize, Serialize};
 #[cfg(windows)]
@@ -20,11 +26,11 @@ use fpsdk::plugin::message;
 use fpsdk::plugin::{self, Info, InfoBuilder, Plugin, StateReader, StateWriter};
 use fpsdk::voice::{self, ReceiveVoiceHandler, SendVoiceHandler, Voice};
 use fpsdk::{
-    add_child_window_s, create_plugin, AsRawPtr, FromRawPtr, MessageBoxFlags, MidiMessage, Note,
-    Notes, NotesFlags, ProcessParamFlags, TimeFormat, ValuePtr, VstView,
+    create_plugin, AsRawPtr, FromRawPtr, MessageBoxFlags, MidiMessage, Note, Notes, NotesFlags,
+    ProcessParamFlags, TimeFormat, ValuePtr,
 };
 
-use ui::init_window;
+// use gui;
 
 static ONCE: Once = Once::new();
 const LOG_PATH: &str = "simple.log";
@@ -36,8 +42,10 @@ struct Simple {
     param_names: Vec<String>,
     state: State,
     voice_handler: SimpleVoiceHandler,
-    view: Option<VstView>,
 }
+
+unsafe impl Send for Simple {}
+unsafe impl Sync for Simple {}
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 struct State {
@@ -65,7 +73,6 @@ impl Plugin for Simple {
                 "Parameter 3".into(),
             ],
             state: Default::default(),
-            view: None,
         }
     }
 
@@ -128,16 +135,24 @@ impl Plugin for Simple {
         }
 
         if let host::Message::ShowEditor(Some(parent)) = message {
-            if !parent.is_null() {
-                if self.view.is_none() {
-                    self.view = Some(VstView::new(parent));
-                }
-                self.view.as_mut().unwrap().open();
+            let view = parent.raw_handle() as id;
+            unsafe {
+                NSView::setFrameSize(view, NSSize::new(200.0, 100.0));
+                let frame = NSView::frame(view);
+                let window = NSWindow::alloc(nil).initWithContentRect_styleMask_backing_defer_(
+                    frame,
+                    NSWindowStyleMask::NSBorderlessWindowMask
+                        | NSWindowStyleMask::NSTitledWindowMask,
+                    NSBackingStoreType::NSBackingStoreBuffered,
+                    0,
+                );
+                let color = NSColor::colorWithRed_green_blue_alpha_(nil, 1.0, 0.5, 0.0, 1.0);
+                window.orderFront_(window);
+                window.contentView().setWantsLayer(1);
+                window.contentView().setBackgroundColor_(color);
+
+                view.addSubview_(window.contentView());
             }
-            // let window = init_window();
-            // let handle = window.get_window_handle();
-            // info!("got window handle {:?}", handle);
-            // add_child_window_s(parent, handle);
         }
         // if let host::Message::ShowEditor(None) = message {
         // if self.view.is_some() {

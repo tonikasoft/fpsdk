@@ -273,7 +273,7 @@ impl EditorHandle {
         self.raw_handle
     }
     /// Attach your editor the handle.
-    pub fn attach_editor<V: HasRawWindowHandle>(&mut self, view: &mut V) {
+    pub fn attach_editor<V: HasRawWindowHandle>(&self, view: &mut V) {
         // We make separate private implementations here, because docs on docs.rs is compiled under
         // linux, so if we just use different attach_editor per platform, it'll be hidden on
         // docs.rs.
@@ -289,7 +289,7 @@ impl EditorHandle {
     }
 
     #[cfg(target_os = "macos")]
-    unsafe fn attach_editor_mac<V: HasRawWindowHandle>(&mut self, view: &mut V) {
+    unsafe fn attach_editor_mac<V: HasRawWindowHandle>(&self, view: &mut V) {
         if let RawWindowHandle::MacOS(handle) = view.raw_window_handle() {
             if handle.ns_view.is_null() {
                 return;
@@ -303,7 +303,7 @@ impl EditorHandle {
     }
 
     #[cfg(target_os = "windows")]
-    unsafe fn attach_editor_win<V: HasRawWindowHandle>(&mut self, view: &mut V) {}
+    unsafe fn attach_editor_win<V: HasRawWindowHandle>(&self, view: &mut V) {}
 }
 
 impl FromRawPtr for EditorHandle {

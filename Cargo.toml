@@ -25,13 +25,14 @@ cc = { version = "1.0", features = ["parallel"] }
 
 [dev-dependencies]
 bincode = "1.2"
+chrono = "0.4"
+iced = { git = "https://github.com/hecrj/iced.git", features = ["canvas", "tokio", "debug"] }
 log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 simple-logging = "2.0"
 simplelog = "0.7"
-minifb = "0.16"
 
 [[example]]
 name = "simple"
-path = "examples/simple.rs"
+path = "examples/simple/simple.rs"
 crate-type = ["cdylib"]

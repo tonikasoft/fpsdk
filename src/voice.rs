@@ -1,5 +1,5 @@
-//! Voices used by generators to track events like their instantiation, release, freeing and
-//! processing some events.
+//! Voices used by the generator plugins to track their instantiation, release, freeing and events
+//! processing.
 use std::os::raw::c_void;
 
 use crate::plugin::PluginAdapter;
