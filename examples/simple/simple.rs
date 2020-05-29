@@ -13,7 +13,7 @@ use cocoa::appkit::{NSBackingStoreType, NSColor, NSView, NSWindow, NSWindowStyle
 #[cfg(target_os = "macos")]
 use cocoa::base::{id, nil};
 #[cfg(target_os = "macos")]
-use cocoa::foundation::{NSPoint, NSRect, NSSize};
+use cocoa::foundation::NSSize;
 use log::{error, info, trace, LevelFilter};
 use serde::{Deserialize, Serialize};
 #[cfg(windows)]
@@ -26,8 +26,8 @@ use fpsdk::plugin::message;
 use fpsdk::plugin::{self, Info, InfoBuilder, Plugin, StateReader, StateWriter};
 use fpsdk::voice::{self, ReceiveVoiceHandler, SendVoiceHandler, Voice};
 use fpsdk::{
-    create_plugin, AsRawPtr, FromRawPtr, MessageBoxFlags, MidiMessage, Note, Notes, NotesFlags,
-    ProcessParamFlags, TimeFormat, ValuePtr,
+    create_plugin, AsRawPtr, EditorHandle, FromRawPtr, MessageBoxFlags, MidiMessage, Note, Notes,
+    NotesFlags, ProcessParamFlags, TimeFormat, ValuePtr,
 };
 
 // use gui;
@@ -135,24 +135,7 @@ impl Plugin for Simple {
         }
 
         if let host::Message::ShowEditor(Some(parent)) = message {
-            let view = parent.raw_handle() as id;
-            unsafe {
-                NSView::setFrameSize(view, NSSize::new(200.0, 100.0));
-                let frame = NSView::frame(view);
-                let window = NSWindow::alloc(nil).initWithContentRect_styleMask_backing_defer_(
-                    frame,
-                    NSWindowStyleMask::NSBorderlessWindowMask
-                        | NSWindowStyleMask::NSTitledWindowMask,
-                    NSBackingStoreType::NSBackingStoreBuffered,
-                    0,
-                );
-                let color = NSColor::colorWithRed_green_blue_alpha_(nil, 1.0, 0.5, 0.0, 1.0);
-                window.orderFront_(window);
-                window.contentView().setWantsLayer(1);
-                window.contentView().setBackgroundColor_(color);
-
-                view.addSubview_(window.contentView());
-            }
+            self.show_editor(parent);
         }
         // if let host::Message::ShowEditor(None) = message {
         // if self.view.is_some() {
@@ -343,6 +326,33 @@ impl Simple {
 
     fn say_hello_hint(&mut self) {
         self.host.on_hint(self.tag, "^c Hello".to_string());
+    }
+
+    #[cfg(target_os = "linux")]
+    fn show_editor(&mut self, parent: EditorHandle) {}
+
+    #[cfg(windows)]
+    fn show_editor(&mut self, parent: EditorHandle) {}
+
+    #[cfg(target_os = "macos")]
+    fn show_editor(&mut self, parent: EditorHandle) {
+        let view = parent.raw_handle() as id;
+        unsafe {
+            NSView::setFrameSize(view, NSSize::new(200.0, 100.0));
+            let frame = NSView::frame(view);
+            let window = NSWindow::alloc(nil).initWithContentRect_styleMask_backing_defer_(
+                frame,
+                NSWindowStyleMask::NSBorderlessWindowMask | NSWindowStyleMask::NSTitledWindowMask,
+                NSBackingStoreType::NSBackingStoreBuffered,
+                0,
+            );
+            let color = NSColor::colorWithRed_green_blue_alpha_(nil, 1.0, 0.5, 0.0, 1.0);
+            window.orderFront_(window);
+            window.contentView().setWantsLayer(1);
+            window.contentView().setBackgroundColor_(color);
+
+            view.addSubview_(window.contentView());
+        }
     }
 }
 
