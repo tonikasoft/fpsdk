@@ -1,4 +1,4 @@
-pub mod gui;
+mod gui;
 
 use std::collections::HashMap;
 #[cfg(unix)]
@@ -30,18 +30,18 @@ use fpsdk::{
     NotesFlags, ProcessParamFlags, TimeFormat, ValuePtr,
 };
 
-// use gui;
+use gui::Editor;
 
 static ONCE: Once = Once::new();
 const LOG_PATH: &str = "simple.log";
 
-#[derive(Debug)]
 struct Simple {
     host: Host,
     tag: plugin::Tag,
     param_names: Vec<String>,
     state: State,
     voice_handler: SimpleVoiceHandler,
+    editor: Editor,
 }
 
 unsafe impl Send for Simple {}
@@ -73,6 +73,7 @@ impl Plugin for Simple {
                 "Parameter 3".into(),
             ],
             state: Default::default(),
+            editor: Editor::new(),
         }
     }
 
@@ -132,10 +133,22 @@ impl Plugin for Simple {
 
         if let host::Message::SetEnabled(enabled) = message {
             self.on_set_enabled(enabled, message.clone());
+            // self.host.on_message(self.tag, message::VstiIdle);
+            self.host
+                .on_message(self.tag, message::WantIdle::EnabledAlways);
         }
 
-        if let host::Message::ShowEditor(Some(parent)) = message {
-            self.show_editor(parent);
+        if let host::Message::ShowEditor(handle) = message {
+            match handle {
+                Some(parent) => {
+                    let parent_view = parent.raw_handle() as id;
+                    // self.editor.open();
+                    // unsafe {
+                    // parent_view.addSubview_(self.editor.raw_view() as id);
+                    // }
+                }
+                None => self.editor.close(),
+            }
         }
         // if let host::Message::ShowEditor(None) = message {
         // if self.view.is_some() {
@@ -171,7 +184,10 @@ impl Plugin for Simple {
     }
 
     fn idle(&mut self) {
-        trace!("{} idle", self.tag);
+        trace!("am i blocking?");
+        self.editor.event_loop_step();
+        trace!("no, i'm not");
+        panic!("it's not blocking, if it's panic");
     }
 
     // looks like it doesn't work in SDK
@@ -469,6 +485,11 @@ impl SendVoiceHandler for SimpleOutVoiceHandler {
 fn init_log() {
     ONCE.call_once(|| {
         _init_log();
+
+        std::panic::set_hook(Box::new(|info| {
+            error!("{}", info);
+        }));
+
         info!("init log");
     });
 }

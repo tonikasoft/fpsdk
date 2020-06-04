@@ -26,7 +26,9 @@ cc = { version = "1.0", features = ["parallel"] }
 [dev-dependencies]
 bincode = "1.2"
 chrono = "0.4"
-iced = { git = "https://github.com/hecrj/iced.git", features = ["canvas", "tokio", "debug"] }
+cocoa = "0.20"
+iced_wgpu = { git = "https://github.com/hecrj/iced.git" }
+iced_winit = { git = "https://github.com/hecrj/iced.git" }
 log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 simple-logging = "2.0"
@@ -36,3 +38,7 @@ simplelog = "0.7"
 name = "simple"
 path = "examples/simple/simple.rs"
 crate-type = ["cdylib"]
+
+[[example]]
+name = "gui"
+path = "examples/simple/main.rs"

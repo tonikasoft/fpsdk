@@ -5,7 +5,6 @@ pub mod message;
 use std::ffi::CString;
 use std::io::{self, Read, Write};
 use std::os::raw::{c_char, c_int, c_void};
-use std::panic::RefUnwindSafe;
 
 use hresult::HRESULT;
 use log::{debug, error};
@@ -52,7 +51,7 @@ macro_rules! create_plugin {
 }
 
 /// This trait must be implemented for your plugin.
-pub trait Plugin: std::fmt::Debug + RefUnwindSafe + Send + Sync + 'static {
+pub trait Plugin {
     /// Initializer.
     fn new(host: Host, tag: Tag) -> Self
     where
@@ -445,7 +444,6 @@ fn check_hresult(result: HRESULT, read: usize, error_msg: &str) -> io::Result<us
 ///
 /// This is for internal usage only and shouldn't be used directly.
 #[doc(hidden)]
-#[derive(Debug)]
 pub struct PluginAdapter(pub Box<dyn Plugin>);
 
 /// [`Plugin::info`](trait.Plugin.html#tymethod.info) FFI.
